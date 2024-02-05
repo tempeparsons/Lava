@@ -1,0 +1,5 @@
+Accession
+Fya-b-	Fya-b-.1	Fya-b-.2	Fya-b-.3
+Fya-b+	Fya-b+.1	Fya-b+.2	Fya-b+.3
+Fya+b-	Fya+b-.1	Fya+b-.2
+Fya+b+	Fya+b+.1	Fya+b+.2	Fya+b+.3	Fya+b+.4

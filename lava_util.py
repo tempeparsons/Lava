@@ -1,3 +1,6 @@
+
+from matplotlib import pyplot as plt
+
 def plot_sums_means_nans(df, value_cols):
     totals = df[value_cols].sum(axis=0)
     means = df[value_cols].mean(axis=0)
@@ -14,7 +17,10 @@ def plot_sums_means_nans(df, value_cols):
         ax.tick_params(axis='x', rotation=90)
         
     plt.subplots_adjust(hspace=0.4)
-
+    
+    # # # # 
+    
+    plt.show()
     
     
 def boxplots(df, value_cols):
