@@ -1,40 +1,100 @@
-
+import numpy as np
 from matplotlib import pyplot as plt
+import matplotlib.patheffects as PathEffects
 
-def plot_sums_means_nans(df, value_cols):
+DPI = 300
+
+
+def plot_sums_means_nans(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], edge_color='#404040'):
+    
     totals = df[value_cols].sum(axis=0)
     means = df[value_cols].mean(axis=0)
     nancounts = df[value_cols].isna().sum()
     contents = [totals, means, nancounts]
-    titles = ['column totals', 'column means', 'column nan counts']
+    n_cols = len(value_cols)
     
-    fig, axs = plt.subplots(3, figsize=(6,3), sharex=True)
+    titles = ['Totals', 'Averages', 'Missing values']
+    y_labels = ['Column total', 'Column mean', 'Column NaN count']
+    
+    fig, axs = plt.subplots(3, figsize=(8,8), sharex=False)
+    x_pad = 0.6
+    x_vals = np.arange(0, n_cols)
     
     for i, ax in enumerate(axs.flat):
-        ax.bar(value_cols, contents[i])
-        ax.set_title(titles[i], fontsize=10)
-        ax.margins(x=0)
-        ax.tick_params(axis='x', rotation=90)
+        ax.bar(x_vals, contents[i], color=colors[i], edgecolor=edge_color)
+        ax.set_title(titles[i], fontsize=12, color=colors[i], fontdict={'fontweight':'bold'} )
+        ax.set_ylabel(y_labels[i])
+        ax.set_xlim(-x_pad, n_cols-1+x_pad)
+        ax.set_xticks(x_vals)
+        ax.set_xticklabels(1+x_vals)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
         
-    plt.subplots_adjust(hspace=0.4)
+        for j, col in enumerate(value_cols):
+            txt = ax.text(j, 0.1*max(contents[i]), col, va='bottom', ha='center', rotation=90, color='#FFFFFF')
+            txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground=edge_color)])
+
+    ax.set_xlabel('Data column/sample')    
+    plt.subplots_adjust(hspace=0.35, bottom=0.1, top=0.95, right=0.95)
     
-    # # # # 
+    if pdf:
+      pdf.savefig(dpi=DPI)
+    else:
+      plt.show()
     
-    plt.show()
-    
-    
-def boxplots(df, value_cols):
-    fig, axs = plt.subplots(1,1, figsize=(8,4))
-    df.boxplot(column=value_cols, grid=False, rot=45, fontsize=8)     
+    plt.close()
     
     
+def boxplots(df, value_cols, pdf, scatter_colors=['#D00000','#A0A000','#0080FF'], scatter_width=0.7):
     
-def histograms(df, value_cols):
+    box_style = {'linewidth':1, 'color':'#0080FF', 'markerfacecolor':'#D00000'}
+    line_style = {'linewidth':1, 'color':'#0080FF'}
+    outlier_style = {'linewidth':1, 'markeredgecolor':'#D00000', 'markerfacecolor':'#FF8080'}
+    med_style = {'linewidth':1, 'color':'#000000'}
+    
+    fig, (ax1, ax2) = plt.subplots(2,1, figsize=(8,8))
+    df.boxplot(column=value_cols, ax=ax1, grid=False, rot=45, fontsize=8, boxprops=box_style,
+               whiskerprops=line_style, capprops=line_style, flierprops=outlier_style, medianprops=med_style)     
+    ax1.set_title('Sample value distributions')
+
+    ns = len(scatter_colors)
+    nc = len(value_cols)
+    
+    for i, col in enumerate(value_cols):
+      y_vals = np.sort(df[col])
+      
+      # Random but avoidung clumps
+      dx = np.random.uniform(scatter_width/4, scatter_width/2, len(y_vals))
+      x_vals = i + (np.cumsum(dx) % scatter_width) - scatter_width/2
+      
+      color = scatter_colors[i % ns]
+      ax2.scatter(x_vals, y_vals, color=color, alpha=0.4, s=5)
+    
+    x_ticks = np.arange(0, nc)   
+    ax2.set_xlim(-0.5, nc-0.5)  
+    ax2.set_xticks(x_ticks)
+    ax2.set_xticklabels(x_ticks+1)
+    ax2.set_xlabel('Sample column')
+    ax2.tick_params('x', top=True)
+    
+    plt.subplots_adjust(hspace=0.35, top=0.90, bottom=0.1, left=0.05, right=0.95)    
+    
+    if pdf:
+      pdf.savefig(dpi=DPI)
+    else:
+      plt.show()
+    
+    plt.close()
+    
+    
+def histograms(df, value_cols, pdf):
     #cols = df.columns[value_cols].to_list()
+    
     params = {'axes.titlesize':'8',
               'xtick.labelsize':'7',
               'ytick.labelsize':'7', 
               'axes.titley': '0.7'}
+              
     plt.rcParams.update(params)
     df.hist(column=value_cols, 
             alpha=0.5, 
@@ -43,22 +103,42 @@ def histograms(df, value_cols):
             sharex=True, sharey=True, 
             xlabelsize=6, ylabelsize=6,
             figsize=(9,9))
-    plt.subplots_adjust(hspace=0.1, wspace=0.1) 
-    plt.show()
+    
+    plt.subplots_adjust(hspace=0.1, wspace=0.1, top=0.95, bottom=0.05, left=0.05, right=0.95) 
+    
+    if pdf:
+      pdf.savefig(dpi=DPI)
+    else:
+      plt.show()
+    
+    plt.close()
+    
 
     
     
-def xy_plots(df, value_cols, ncols):
+def xy_plots(df, value_cols, ncols, pdf):
     nrows = df.shape[1] // ncols + (df.shape[1] % ncols > 0)
     cols = value_cols
-    fig, axs = plt.subplots(nrows,ncols, figsize=(8,8), sharex=True, sharey=True)
+    fig, axs = plt.subplots(nrows, ncols, figsize=(8,8), sharex=True, sharey=True)
     for i in range(len(cols)-1):
         axs.flat[i].scatter(df[cols[i]], df[cols[i+1]], s=5, alpha=0.6)
-        axs.flat[i].set_title(f'{cols[i]} vs {cols[i+1]}', fontsize=8)
+        txt = axs.flat[i].set_title(f'{cols[i]} vs {cols[i+1]}', fontsize=8)
+        txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
         ymin, ymax = axs.flat[i].get_ylim()
         axs.flat[i].axline([ymax*0.5,ymax*0.5], slope=1, c='r', lw=0.5)    
-    plt.subplots_adjust(wspace=0.05, hspace=0.2)
-
+    
+    # switch off unused axes
+    for i in range(len(value_cols)-1, nrows*ncols):
+        axs.flat[i].set_visible(False)
+        
+    plt.subplots_adjust(wspace=0.05, hspace=0.2, top=0.95, bottom=0.05, left=0.05, right=0.95)
+    
+    if pdf:
+      pdf.savefig(dpi=DPI)
+    else:
+      plt.show()
+    
+    plt.close()
 
     
 def remove_rows(df, grpsize1, grpsize2):
