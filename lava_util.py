@@ -1,9 +1,12 @@
+import math
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.patheffects as PathEffects
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
+from scipy.stats import ttest_ind_from_stats
 
 DPI = 300
-
 
 def plot_sums_means_nans(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], edge_color='#404040'):
     
@@ -21,7 +24,7 @@ def plot_sums_means_nans(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080
     x_vals = np.arange(0, n_cols)
     
     for i, ax in enumerate(axs.flat):
-        ax.bar(x_vals, contents[i], color=colors[i], edgecolor=edge_color)
+        ax.bar(x_vals, contents[i], color=colors[i], edgecolor=edge_color, alpha=0.75)
         ax.set_title(titles[i], fontsize=12, color=colors[i], fontdict={'fontweight':'bold'} )
         ax.set_ylabel(y_labels[i])
         ax.set_xlim(-x_pad, n_cols-1+x_pad)
@@ -90,12 +93,12 @@ def boxplots(df, value_cols, pdf, scatter_colors=['#D00000','#A0A000','#0080FF']
 def histograms(df, value_cols, pdf):
     #cols = df.columns[value_cols].to_list()
     
-    params = {'axes.titlesize':'8',
-              'xtick.labelsize':'7',
-              'ytick.labelsize':'7', 
-              'axes.titley': '0.7'}
+    #params = {'axes.titlesize':'8',
+    #          'xtick.labelsize':'7',
+    #          'ytick.labelsize':'7', 
+    #          'axes.titley': '0.7'}
               
-    plt.rcParams.update(params)
+    #plt.rcParams.update(params)
     df.hist(column=value_cols, 
             alpha=0.5, 
             bins=50, 
@@ -142,40 +145,46 @@ def xy_plots(df, value_cols, ncols, pdf):
 
     
 def remove_rows(df, grpsize1, grpsize2):
+
     cols = df.columns
-    if grpsize1 == 4 and grpsize2 == 4:
-        df = df.drop(df[(df.iloc[:,-1] == 2) & (df.iloc[:,-2] == 1)].index)
-        df = df.drop(df[(df.iloc[:,-1] == 1) & (df.iloc[:,-2] == 2)].index)
-        df = df.drop(df[(df.iloc[:,-1] == 0) & (df.iloc[:,-2] == 2)].index)
-        df = df.drop(df[(df.iloc[:,-1] == 2) & (df.iloc[:,-2] == 0)].index)
-        df = df.drop(df[(df.iloc[:,-1] == 1) & (df.iloc[:,-2] == 1)].index)
-        df = df.drop(df[(df.iloc[:,-1] == 0) & (df.iloc[:,-2] == 1)].index)
-        df = df.drop(df[(df.iloc[:,-1] == 1) & (df.iloc[:,-2] == 0)].index)
-        df = df.drop(df[(df.iloc[:,-1] == 0) & (df.iloc[:,-2] == 0)].index)
-        df.loc[df[cols[-2]] == 0, cols[:4]] = [0,0,0,0]
-        df.loc[df[cols[-1]] == 0, cols[4:8]] = [0,0,0,0]
-        df.loc[df[cols[-2]] == 1, cols[-2]] = 2
-        df.loc[df[cols[-1]] == 1, cols[-1]] = 2
-        return df
-    if grpsize1 == 3 or grpsize2 == 3:
-        df = df.drop(df[(df.iloc[:,-1] == 1) & (df.iloc[:,-2] == 1)].index)
-        df = df.drop(df[(df.iloc[:,-1] == 0) & (df.iloc[:,-2] == 1)].index)
-        df = df.drop(df[(df.iloc[:,-1] == 1) & (df.iloc[:,-2] == 0)].index)
-        df = df.drop(df[(df.iloc[:,-1] == 0) & (df.iloc[:,-2] == 0)].index)
-        if grpsize2 == 3:
-            df.loc[df[cols[-2]] == 0, cols[:4]] = [0,0,0,0]#######################
-            df.loc[df[cols[-1]] == 0, cols[4:7]] = [0,0,0]
-        if grpsize1 == 3:
-            df.loc[df[cols[-2]] == 0, cols[:3]] = [0,0,0]
-            df.loc[df[cols[-1]] == 0, cols[3:7]] = [0,0,0,0]
-        if grpsize1 == 3 and grpsize2 == 4:
-            df.loc[df[cols[-4]] == 0, cols[:3]] = [0,0,0]
-            df.loc[df[cols[-1]] == 0, cols[3:6]] = [0,0,0]
-        df.loc[df[cols[-2]] == 1, cols[-2]] = 2
-        df.loc[df[cols[-1]] == 1, cols[-1]] = 2
+ 
+    # fine
+    # 4/4 1/4 
+    # 3/4 1/4
+    # 3/3 1/3 
+    
+    # borderline
+    # 2/4 2/4
+    
+    # not fine
+    # 2/4 1/4
+    # 1/3 1/3 
+    # 2/2 1/2 ?
+    # 2/3 1/3 ?
+    # 2/2 1/3 ?
+    
+    # Remove if up to half missing on both sides
+    thresh1 =  grpsize1 // 2
+    thresh2 =  grpsize2 // 2
+   
+    # Drop if less than half on both sides: 2/4 both sides is borderline and kept
+    df = df.drop(df[(df.iloc[:,-1] <= thresh1) & (df.iloc[:,-2] < thresh2)].index)
+    df = df.drop(df[(df.iloc[:,-1] < thresh1) & (df.iloc[:,-2] <= thresh2)].index)
+    
+    # Need at least 3 on one side to compare a singlular val
+    df = df.drop(df[(df.iloc[:,-1] < 3) & (df.iloc[:,-2] == 1)].index)
+    df = df.drop(df[(df.iloc[:,-1] == 1) & (df.iloc[:,-2] < 3)].index)
+    
+    # Any pure zeros are real zeros not NaN
+    df.loc[df[cols[-2]] == 0, cols[:grpsize1]] = [0] * grpsize1
+    df.loc[df[cols[-1]] == 0, cols[grpsize1:grpsize1+grpsize2]] = [0] * grpsize2
+    
+    # Any singlular dat has nobs set to 2 for t-test
+    df.loc[df[cols[-2]] == 1, cols[-2]] = 2 # Nobs for t-test
+    df.loc[df[cols[-1]] == 1, cols[-1]] = 2
+    
     return df
     
-
     
 def prpn_log2FCs_over_threshold(df, thresh_int):    
     fcs = df['grp1grp2_FC'].to_list()
@@ -217,34 +226,87 @@ def ttest_from_stats_eqvar(df):
 
 
 
-def pvalFC_hists(plotdictkey):
-    df = plotdict[plotdictkey]
-    fig, axs = plt.subplots(1,2, figsize = (8,2), sharex='col', sharey=False)
-    pvals = df['pvals'].to_list()
-    FCs = df['grp1grp2_FC'].to_list()
-    axs[0].hist(pvals, bins=50)
-    axs[0].set_title(f'p-value distrbution for {plotdictkey}', fontsize=6)
-    axs[1].hist(FCs, bins=50)
-    axs[1].set_title(f'fold change distribution for {plotdictkey}', fontsize=6)
-    axs[0].set_ylabel('frequency', fontsize=6)
-    axs[0].set_xlabel('value', fontsize=6)
-    axs[1].set_xlabel('value', fontsize=6)
+def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=50):
+    
+    ###  Splt this between comparison sets
+    
+    keys = sorted(plotdict.keys())
+    n_rows = len(keys)
+    
+    fig, axs = plt.subplots(n_rows, 2, figsize = (8, n_rows*1.2), sharex='col')
+    
+    c0, c1 = colors
+    x0_min = -1.0/nbins
+    x0_max = 1.0 - x0_min
+     
+    for row, key in enumerate(keys):
+         df = plotdict[key]
+         ax0 = axs[row, 0]
+         ax1 = axs[row, 1]
+         
+         pvals = df['pvals'].to_list()
+         FCs = df['grp1grp2_FC'].to_list()
+         
+         if row == 0:
+             ax0.set_title(f'P-value distrbutions', color=c0)    
+             ax1.set_title(f'Fold change distributions', color=c1)
+ 
+         txt0 = ax0.text(0.05, 0.8, key, transform=ax0.transAxes, fontsize=12)
+         txt1 = ax1.text(0.05, 0.8, key, transform=ax1.transAxes, fontsize=12)
+         txt0.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
+         txt1.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
+         
+         #ax0.hist(pvals, bins=nbins, color=c0, range=(0.0, 1.0))
+         hist, edges = np.histogram(pvals, bins=nbins, range=(0.0, 1.0))
+         x_vals = 0.5 * (edges[:-1] + edges[1:])
+         ax0.plot(x_vals, hist, color=c0, linewidth=1)
+         ax0.fill_between(x_vals, hist, 0, color=c0, alpha=0.5)
 
+         ax0.set_xlim(x0_min, x0_max)
+          
+         #ax1.hist(FCs, bins=nbins, color=c1)
+         hist, edges = np.histogram(FCs, bins=nbins)
+         x_vals = 0.5 * (edges[:-1] + edges[1:])
+         ax1.axvline(0.0, linewidth=1, linestyle='--', color='#808080', alpha=0.5)
+         ax1.plot(x_vals, hist, color=c1, linewidth=1)
+         ax1.fill_between(x_vals, hist, 0, color=c1, alpha=0.5)
+         
+         ax0.set_ylabel('Bin count', fontsize=fontsize)
+         
+         ax0.set_ylim(0)
+         ax1.set_ylim(0)
+         
+         if row == (n_rows-1):
+             ax0.set_xlabel('p-value', fontsize=fontsize)
+             ax1.set_xlabel('$log_2$ fold-change', fontsize=fontsize)
+         #else:
+         #    ax0.set_xticklabels([])
+         #    ax1.set_xticklabels([])
+         
+    
+    plt.subplots_adjust(wspace=0.15, hspace=0.1, top=0.95, bottom=0.05, left=0.1, right=0.95)
+
+    if pdf:
+      pdf.savefig(dpi=DPI)
+    else:
+      plt.show()
+    
+    plt.close()
     
     
-    
-def get_bins(plotdictkey):
-    df = plotdict[plotdictkey]
-    FCs = df['grp1grp2_FC'].to_list()
+def get_bins(pair_df):
+
+    FCs = pair_df['grp1grp2_FC'].to_list()
     fcmin = np.nanmin(FCs)
     fcmax = np.nanmax(FCs)
     counts, edges = np.histogram(FCs, bins=50, range=(fcmin, fcmax))
+    
     return(counts, edges)
 
 
 
-def get_xlist(df_pair):
-    counts, edges = get_bins(df_pair)
+def get_xlist(pair_df):
+    counts, edges = get_bins(pair_df)
 
     xmin = None
     xmax = None
@@ -261,8 +323,8 @@ def get_xlist(df_pair):
 
 
 
-def get_splitxlist(df_pair):
-    counts, edges = get_bins(df_pair)
+def get_splitxlist(pair_df):
+    counts, edges = get_bins(pair_df)
     xmiddles = []
 
     x0 = None
@@ -293,3 +355,85 @@ def get_splitxlist(df_pair):
     splitxlist = sorted(splitxlist)
     
     return splitxlist
+    
+    
+def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors, hq_only=False, hit_labels=True, print_hits=True, markers=None, lw=0.25, ls='--'):
+    
+    group1, group2 = pair_name.split(':')
+    q951, q952 = q95
+    
+    if not markers:
+      markers = []
+      
+    datacols = [df.index, df['grp1grp2_FC'], df['Tpvals'], df['Tpvals_q95'], df['zstd_grp1_q95'], df['zstd_grp2_q95']]
+
+    if hq_only:
+        plotlist = datacols[:3]
+    else:
+        plotlist = datacols[:6]
+    
+    pos_overFC = []
+    neg_overFC = []
+    
+    color_pos, color_neg, color_low = colors
+    xlims = get_xlist(df)
+ 
+    fig, ax = plt.subplots(figsize = (10,8), sharey=True)
+ 
+    ax.set_xlim(xlims[0], xlims[1])
+
+    ax.axvline(FClim,  ls=ls, c='k', alpha=0.5, lw=lw)
+    ax.axvline(-FClim, ls=ls, c='k', alpha=0.5, lw=lw)
+    ax.axhline(pthresh,ls=ls, c='k', alpha=0.5, lw=lw)
+
+    ax.set_title(pair_name, fontsize=18)
+    ax.set_ylabel('-log2 transformed p-value')
+    ax.set_xlabel('log2 fold change')
+ 
+    ax.scatter(plotlist[1], plotlist[2], s=8, color='w', edgecolors='darkgrey', lw=lw)
+
+    marker_text = []
+
+    for i, name in enumerate(plotlist[0]):
+
+        if name in markers:
+            marker_text.append((plotlist[1][i], plotlist[2][i], name))
+            ax.scatter(plotlist[1][i], plotlist[2][i], s=3, color='k')
+
+        if plotlist[1][i] >= FClim and plotlist[2][i] >= pthresh:
+            pos_overFC.append(name)
+            ax.scatter(plotlist[1][i], plotlist[2][i], s=10, color=color_pos)
+            if hit_labels:
+                ax.annotate(name, xy=(plotlist[1][i], plotlist[2][i]), fontsize=6)
+
+        if plotlist[1][i] <= -FClim  and plotlist[2][i] >= pthresh:
+            neg_overFC.append(name)
+            ax.scatter(plotlist[1][i], plotlist[2][i], s=10, color=color_neg)
+            if hit_labels:
+                ax.annotate(name, xy=(plotlist[1][i], plotlist[2][i]), fontsize=6)
+
+        if not hq_only:
+            if plotlist[3][i] == q951 or plotlist[4][i] == q952:
+                ax.scatter(plotlist[1][i], plotlist[2][i], s=6, color=color_low)
+
+    for tx in marker_text:
+            ax.annotate(tx[2], xy=(tx[0], tx[1]),  xytext=(tx[0], tx[1]),
+                    arrowprops=dict(arrowstyle='-', fc="k", ec="k", lw=0.5, relpos=(0.25, 0.5)),
+                    bbox=dict(pad=-2, facecolor="none", edgecolor="none"),
+                    ha="left", va="center", size=6)
+ 
+    legend_elements = [Line2D([0], [0], marker='o', color='w', label=f'Greater in {group1}',markerfacecolor=color_pos, markersize=8, linestyle=''),
+                       Line2D([0], [0], marker='o', color='w', label=f'Greater in {group2}',markerfacecolor=color_neg, markersize=8, linestyle='')]
+    ax.legend(handles=legend_elements)
+    
+    if print_hits:
+        print('greater in grp1:', pos_overFC)
+        print('greater in grp2:', neg_overFC)
+
+    if pdf:
+      pdf.savefig(dpi=DPI)
+    else:
+      plt.show()
+    
+    plt.close()
+    
