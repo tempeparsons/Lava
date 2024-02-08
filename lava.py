@@ -9,6 +9,7 @@ from matplotlib.colors import is_color_like
 from matplotlib.backends.backend_pdf import PdfPages
 
 import lava_util as util
+import lava_plots as plots
 
 VERSION = 0.1
 
@@ -258,12 +259,12 @@ def _check_cols(df, selection):
              col = int(col)-1  # 1-based to 0-based
               
              if 0 < col < n_cols:
-                 vaild.append(cols[col])
+                 valid.append(cols[col])
              else:   
                  warn('Column number {col} not valid') 
                     
          elif col in df:
-             vaild.append(col)
+             valid.append(col)
      
      return valid
      
@@ -403,7 +404,7 @@ def lava(in_path, pdf_path=None, software=VALID_SOFTWARE, idx_cols=None,  ref_gr
       print(df.head(10))
     
     info('Plotting bulk properties')
-    util.plot_sums_means_nans(df, value_cols, pdf)
+    plots.plot_sums_means_nans(df, value_cols, pdf)
     
     ### auto warning in dodgy columns ? - automatic or user prommpted drop?
     #columns_to_drop = []
@@ -416,20 +417,19 @@ def lava(in_path, pdf_path=None, software=VALID_SOFTWARE, idx_cols=None,  ref_gr
     
     # box plots
     info('Plotting box-plots')
-    util.boxplots(df, value_cols, pdf)
+    plots.boxplots(df, value_cols, pdf)
 
     # histograms
     info('Plotting distributions')
-    util.histograms(df, value_cols, pdf)
+    plots.histograms(df, value_cols, pdf)
+
+    info('Plotting correlations')
+    plots.correlation_plot(df, value_cols, pdf)
     
     # pair scatters
     ncols = 4
     info('Plotting comparisons')
-    util.xy_plots(df, value_cols, ncols, pdf)
-    
-    ## Add correlation matrix density matrix?
-    
-    ## Add summary page of groups and group pairing
+    plots.xy_plots(df, value_cols, ncols, pdf)
     
     
     FCdict = {}
@@ -525,30 +525,25 @@ def lava(in_path, pdf_path=None, software=VALID_SOFTWARE, idx_cols=None,  ref_gr
     # if you got too high or low a %age of proteins over the FC threshold, type your new number instead of 'same'
     # to keep it the same, just leave it as is.
 
-    # f_thresh = 1.5
-
     # now examine the distrbutions of p-values and fold changes for all your pairs.
     # the majority of fold changes should be normally distrbuted around zero
     # the distrbution of p-values will depend on your experiment
 
-    util.pvalFC_hists(plotdict, pdf)
+    plots.pvalFC_hists(plotdict, pdf)
 
     #try:
     #    splitxlist = util.get_splitxlist(key)
     #
     #except IndexError:
     #    fail('x-axis range is not large enough for split x-axis. Remove the -x option')
-
- 
-    #(q951, q952) = q95dict[key]
-
-     
     
     for a, b in pairs:
         pair_name = f'{a}:{b}'
-        util.volcano(pdf, pair_name, plotdict[pair_name], q95dict[pair_name], f_thresh, p_thresh, colors,
-                     hq_only, hit_labels, print_hits, lw=0.25, ls='--')
+        plots.volcano(pdf, pair_name, plotdict[pair_name], q95dict[pair_name], f_thresh, p_thresh, colors,
+                      hq_only, hit_labels, print_hits, lw=0.25, ls='--')
  
+    
+    
     """
 
     if split_x:
@@ -630,18 +625,15 @@ def lava(in_path, pdf_path=None, software=VALID_SOFTWARE, idx_cols=None,  ref_gr
                         arrowprops=dict(arrowstyle='-', fc="k", ec="k", lw=0.5, relpos=(0.25, 0.5)),
                         bbox=dict(pad=-2, facecolor="none", edgecolor="none"),
                         ha="left", va="center", size=6)
- 
- 
 
-        legend_elements = [Line2D([0], [0], marker='o', color='w', label='greater in grp1',markerfacecolor=color_pos, markersize=8, linestyle=''),
-                           Line2D([0], [0], marker='o', color='w', label='greater in grp2',markerfacecolor=color_neg, markersize=8, linestyle='')]
+        legend_elements = [Line2D([0], [0], marker='o', color='w', label='greater in grp1', markerfacecolor=color_pos, markersize=8, linestyle=''),
+                           Line2D([0], [0], marker='o', color='w', label='greater in grp2', markerfacecolor=color_neg, markersize=8, linestyle='')]
         a1.legend(handles=legend_elements)
 
     """
- 
     if pdf:
-      pdf.close()
-      info('Wrote PDF output to {}'.format(pdf_path))    
+        pdf.close()
+        info('Wrote PDF output to {}'.format(pdf_path))    
       
       
 def _check_color(color_spec):
@@ -735,16 +727,19 @@ def main(argv=None):
                            help='If set, causes the names of the significant hits to be printed below the volcano plots.')
   
     # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # 
-    # Add options to rename columns? : file path detection ; auto-truncation
-    # Add markers : list of index col ids to highlight
-    # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # 
-    
-    # Add group info to correlation plots
-    # Have unlogged axis labels 
-    
     # Export proteins in each quadrant ; 4 lists for each comparison
     # Export table of log2FC, FC and p-values
+    # Add parameters/setup page, summary of groups and group pairing
+    # Add CLI text colors
     
+    # (M) Add file path detection in col names ; auto-truncation
+    # (M) Add markers : list of index col ids to highlight
+    # (M) Add grouping info to xy correlation plots
+    
+    # (E) Tweak volcanos; unlogged axis labels 
+    # (H) Split volcanos
+            
+    # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # 
     
     args = vars(arg_parse.parse_args(argv))
  
