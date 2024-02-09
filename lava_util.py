@@ -97,14 +97,15 @@ def get_bins(pair_df):
 
 
 def get_xlist(pair_df):
+    
     counts, edges = get_bins(pair_df)
 
-    xmin = None
-    xmax = None
-
-    for i in range(len(counts)-1):
-        xmin = np.ceil(min(edges)-1)
-        xmax = float(math.floor(max(edges)+1))
+    #xmin = None
+    #xmax = None
+    #for i in range(len(counts)-1):
+    
+    xmin = np.ceil(min(edges)-1.0)
+    xmax = math.floor(max(edges)+1.0)
 
     xtemp = [abs(xmin), abs(xmax)]
     biggest = max(xtemp)
@@ -114,37 +115,43 @@ def get_xlist(pair_df):
 
 
 
-def get_splitxlist(pair_df):
-    counts, edges = get_bins(pair_df)
-    xmiddles = []
-
-    x0 = None
-    x1 = None
-    x2 = None
-    x3 = None
-    x4 = None
-    x5 = None
-
-    xmin = None
-    xmax = None
-
-    for i in range(len(counts)-1):
-        if counts[i] != 0 and counts[i+1] == 0 and counts[i+2] == 0 and counts[i+3] == 0:
-            xmiddles.append(edges[i+3])
-        else:
-            xmin = np.ceil(min(edges)-1)
-            xmax = float(math.floor(max(edges)+1))
-
-    x0 = np.ceil(min(edges)-1)
-    x1 = np.ceil(xmiddles[0]-1)
-    x2 = np.ceil(-xmiddles[1])
-    x3 = float(math.floor(xmiddles[1]))
-    x4 = float(math.floor(abs(xmiddles[0])+1))
-    x5 = float(math.floor(max(edges)+1))
-
-    splitxlist = [x0, x1, x2, x3, x4, x5]
-    splitxlist = sorted(splitxlist)
+def get_splitxlist(pair_df, min_gap=1.0, x_pad=0.1):
     
-    return splitxlist
+    FCs = pair_df['grp1grp2_FC']
+    pvals = pair_df['Tpvals']
     
+    valid =  pvals > 0.0
+    
+    fc_neg = FCs[(FCs < 0.0) & valid]
+    fc_pos = FCs[(FCs > 0.0) & valid]
+    
+    xmin = math.floor(np.nanmin(FCs)-x_pad) # pad avoids split right on edge, making thin strip
+    xmax = math.ceil(np.nanmax(FCs)+x_pad)
+    
+    xmax = max(abs(xmax), abs(xmin)) 
+    xmin = -xmax
+    
+    neg_split = None
+    pos_split = None
+    
+    if len(fc_neg) > 1: # Could technically be empty
+        fc_neg = np.sort(fc_neg)
+        gaps = fc_neg[1:] - fc_neg[:-1]
+        i = np.argmax(gaps) # position of largest gap, in sorted values
+        
+        if gaps[i] >= min_gap:
+            neg_split = [fc_neg[i]+x_pad, fc_neg[i+1]-x_pad] # either side of largest gap
+    
+    if len(fc_pos) > 1:
+        fc_pos = np.sort(fc_pos)
+        gaps = fc_pos[1:] - fc_pos[:-1]
+        i = np.argmax(gaps) # position of largest gap, in sorted values
+        
+        if gaps[i] >= min_gap:
+            pos_split = [fc_pos[i]+x_pad, fc_pos[i+1]-x_pad] # either side of largest gap
+    
+    return [xmin, xmax], neg_split, pos_split
+
+
+  
     

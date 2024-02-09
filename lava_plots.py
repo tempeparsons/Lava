@@ -377,7 +377,7 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
 
 
 def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000','#D00000'],
-            hq_only=False, hit_labels=True, print_hits=True, markers=None,
+            split_x=True, hq_only=False, hit_labels=True, print_hits=True, markers=None,
             lw=0.25, ls='--', lcolor='#808080', max_size=160.0, minsize=8.0):
     
     colors=['#0080FF','#A0A000','#D00000']
@@ -396,26 +396,123 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     else:
         plotlist = datacols[:6]
     
+    pvalues = np.array(df['Tpvals'])
+    fcvalues = np.array(df['grp1grp2_FC'])
+     
     pos_overFC = []
     neg_overFC = []
     
     color_neg, color_low, color_pos = colors
-    xlims = util.get_xlist(df)
- 
-    fig, ax = plt.subplots(figsize = (10,8), sharey=True)
- 
-    ax.set_xlim(xlims[0], xlims[1])
-
-    ax.axvline(FClim,   ls=ls, alpha=0.5, lw=lw, color=lcolor)
-    ax.axvline(-FClim,  ls=ls, alpha=0.5, lw=lw, color=lcolor)
-    ax.axhline(pthresh, ls=ls, alpha=0.5, lw=lw, color=lcolor)
-
-    ax.set_title(pair_name, fontsize=18)
-    #ax.set_ylabel('-log2 transformed p-value')
-    ax.set_ylabel('p-value')
-    ax.set_xlabel('log2 fold change')
     
-    pnorm = plotlist[1]
+    if split_x:
+         xlims, neg_split, pos_split = util.get_splitxlist(df, abs(split_x))
+    
+    else:
+         xlims = util.get_xlist(df)
+         neg_split, pos_split = None, None
+    
+    y_label = 'p-value'
+    figsize=(10,8)
+    xmin, xmax = xlims
+    hline_kw = dict(ls=ls, alpha=0.5, lw=lw, color=lcolor)
+    
+    d = .8
+    diag_kwargs = dict(marker=[(-1, -d), (1, d)], markersize=8,
+                      linestyle="none", color='k', mec='k', mew=1, clip_on=False)
+    
+    if neg_split and pos_split:
+        n1, n2 = neg_split
+        p1, p2 = pos_split
+        width_ratios = {'width_ratios':[n1-xmin, p1-n2, xmax-p2]}
+        fig, (ax0, ax1, ax2) = plt.subplots(1, 3, figsize=figsize, sharey=True, gridspec_kw=width_ratios)
+        ax0.set_ylabel(y_label)
+        ax0.set_xlim(xmin, n1)
+        ax1.set_xlim(n2, p1)
+        ax2.set_xlim(p2, xmax)
+        ax0.spines['right'].set_visible(False)
+        ax1.spines['left'].set_visible(False)
+        ax1.spines['right'].set_visible(False)
+        ax2.spines['left'].set_visible(False)
+        #ax2.yaxis.tick_right()
+        #ax2.yaxis.set_label_position("right")
+        ax0.axhline(pthresh, **hline_kw)
+        ax1.axhline(pthresh, **hline_kw)
+        ax2.axhline(pthresh, **hline_kw)
+        
+        ax0.plot([1,1], [1,0], transform=ax0.transAxes, **diag_kwargs)
+        ax1.plot([0,0], [1,0], [1,1], [1,0], transform=ax1.transAxes, **diag_kwargs)
+        ax2.plot([0,0], [0,1], transform=ax2.transAxes, **diag_kwargs)
+        
+        if xmin < -FClim <= n1:
+            ax0.axvline(-FClim,   **hline_kw)
+        elif n2 <= -FClim < 0.0:
+            ax1.axvline(-FClim,   **hline_kw)
+        
+        if 0.0 < FClim <= p1:
+            ax1.axvline(FClim,   **hline_kw)
+        elif p2 <= FClim < xmax:
+            ax2.axvline(FClim,   **hline_kw)
+        
+    elif neg_split:
+        n1, n2 = neg_split
+        width_ratios = {'width_ratios':[n1-xmin, xmax-n2]}
+        fig, (ax0, ax1) = plt.subplots(1, 2, figsize=figsize, sharey=True, gridspec_kw=width_ratios)
+        ax0.set_ylabel(y_label)
+        ax0.set_xlim(xmin, n1)
+        ax1.set_xlim(n2, xmax)
+        ax2 = None
+        ax0.spines['right'].set_visible(False)
+        ax1.spines['left'].set_visible(False)
+        ax0.axhline(pthresh, **hline_kw)
+        ax1.axhline(pthresh, **hline_kw)
+
+        ax0.plot([1,1], [1,0], transform=ax0.transAxes, **diag_kwargs)
+        ax1.plot([0,0], [1,0], transform=ax1.transAxes, **diag_kwargs)
+        
+        if xmin < -FClim <= n1:
+            ax0.axvline(-FClim,   **hline_kw)
+        elif n2 <= -FClim < xmax:
+            ax1.axvline(-FClim,   **hline_kw)
+        
+    elif pos_split:
+        p1, p2 = pos_split
+        width_ratios = {'width_ratios':[p1-xmin, xmax-p2]}
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize, sharey=True, gridspec_kw=width_ratios)
+        ax0 = None
+        ax1.set_ylabel(y_label)
+        ax1.set_xlim(xmin, p1)
+        ax2.set_xlim(p2, xmax)
+        ax1.spines['right'].set_visible(False)
+        ax2.spines['left'].set_visible(False)
+        #ax2.yaxis.tick_right()
+        #ax2.yaxis.set_label_position("right")
+        ax1.axhline(pthresh, **hline_kw)
+        ax2.axhline(pthresh, **hline_kw)
+
+        ax1.plot([1,1], [1,0], transform=ax1.transAxes, **diag_kwargs)
+        ax2.plot([0,0], [0,1], transform=ax2.transAxes, **diag_kwargs)
+        
+        if xmin < FClim <= p1:
+            ax1.axvline(FClim,   **hline_kw)
+        elif p2 < FClim <= xmax:
+            ax2.axvline(FClim,   **hline_kw)
+        
+    else:
+        fig, ax1 = plt.subplots(figsize=figsize)
+        ax0, ax2 = None, None
+        ax1.set_ylabel(y_label)
+        ax1.set_xlim(xmin, xmax)
+        ax1.axhline(pthresh, **hline_kw)
+        ax1.axvline(FClim,   **hline_kw)
+        ax1.axvline(-FClim,  **hline_kw)
+        
+    fig.subplots_adjust(wspace=0.05)
+    fig.set_clip_on(False)
+    
+    ax1.set_title(pair_name, fontsize=18)
+    ax1.set_xlabel('log2 fold change')
+    
+    pnorm = np.array(plotlist[1])
     pnorm /= pnorm.max() # 0..1
     
     fcnorm = np.abs(plotlist[2])
@@ -425,66 +522,113 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     sizes = max_size * pnorm * pnorm * fcnorm * fcnorm # 0 .. max_size
     sizes = np.clip(sizes, minsize, max_size)
     
-    ax.scatter(plotlist[1], plotlist[2], s=sizes, c=weights, cmap=cmap, norm=Normalize(-1.0, 1.0), alpha=0.4, edgecolors='none')
+    scatter_kw = dict(cmap=cmap, norm=Normalize(-1.0, 1.0), alpha=0.4, edgecolors='none', clip_on=False)
+   
+    # middle bounds
+    m0 = xmin
+    m1 = xmax
+ 
+    if ax0:
+        selection = fcvalues < neg_split[0]
+        
+        if np.any(selection):
+            ax0.scatter(fcvalues[selection], pvalues[selection], s=sizes[selection], c=weights[selection],**scatter_kw)
+        
+        m0 = neg_split[1]
+        
+    if ax2:
+        selection = fcvalues > pos_split[1]
+        if np.any(selection):
+            ax2.scatter(fcvalues[selection], pvalues[selection], s=sizes[selection], c=weights[selection], **scatter_kw)
+        
+        m1 = pos_split[0]
+   
+    selection = (fcvalues >= m0) & (fcvalues <= m1)
+    
+    if np.any(selection):
+        ax1.scatter(fcvalues[selection], pvalues[selection], s=sizes[selection], c=weights[selection], **scatter_kw)
 
     marker_text = []
 
     for i, name in enumerate(plotlist[0]):
         size = sizes[i]
         ds = 0.5 * np.sqrt(size)
+        x = fcvalues[i]
+        y = pvalues[i]
+        
+        if ax0 and (x <= neg_split[0]):
+            ax = ax0
+        elif ax2 and (x >= pos_split[1]):
+            ax = ax2
+        else:
+            ax = ax1  
         
         if name in markers:
-            marker_text.append((plotlist[1][i], plotlist[2][i], name))
-            ax.scatter(plotlist[1][i], plotlist[2][i], s=3, color='k', edgecolor='k')
+            marker_text.append((x, y, name))
+            ax.scatter(x, y, s=3, color='k', edgecolor='k', clip_on=False)
 
-        if plotlist[1][i] >= FClim and plotlist[2][i] >= pthresh:
+        if x >= FClim and y >= pthresh:
             pos_overFC.append(name)
-            ax.scatter(plotlist[1][i], plotlist[2][i], s=size, color=cmap(weights[i]), edgecolor='k', linewidth=0.5)
+            ax.scatter(x, y, s=size, color=cmap(weights[i]), edgecolor='k', linewidth=0.5, clip_on=False)
             if hit_labels:
-                txt = ax.annotate(name, xy=(plotlist[1][i], plotlist[2][i]), xytext=(ds, ds), fontsize=6, textcoords='offset points')
-                txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
-
-        if plotlist[1][i] <= -FClim and plotlist[2][i] >= pthresh:
+                for a in (ax0, ax1, ax2):
+                  if not a:
+                    continue
+                  txt = a.annotate(name, xy=(x, y), xytext=(ds, ds), fontsize=6, textcoords='offset points', clip_on=False)
+                  txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
+ 
+        if x <= -FClim and y >= pthresh:
             neg_overFC.append(name)
-            ax.scatter(plotlist[1][i], plotlist[2][i], s=size, color=cmap(weights[i]), edgecolor='k', linewidth=0.5)
+            ax.scatter(x, y, s=size, color=cmap(weights[i]), edgecolor='k', linewidth=0.5, clip_on=False)
             if hit_labels:
-                txt = ax.annotate(name, xy=(plotlist[1][i], plotlist[2][i]), xytext=(ds, ds), fontsize=6, textcoords='offset points')
-                txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
-
+                for a in (ax0, ax1, ax2):
+                  if not a:
+                    continue
+                  txt = a.annotate(name, xy=(x, y), xytext=(ds, ds), fontsize=6, textcoords='offset points', clip_on=False)
+                  txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
+ 
         if not hq_only:
             if plotlist[3][i] == q951 or plotlist[4][i] == q952:
-                ax.scatter(plotlist[1][i], plotlist[2][i], s=6, color=color_low)
-
+                ax.scatter(x, y, s=6, color=color_low)
+        
     for tx in marker_text:
-            ax.annotate(tx[2], xy=(tx[0], tx[1]),  xytext=(tx[0], tx[1]),
+            txt = ax.annotate(tx[2], xy=(tx[0], tx[1]),  xytext=(tx[0], tx[1]),
                     arrowprops=dict(arrowstyle='-', fc="k", ec="k", lw=0.5, relpos=(0.25, 0.5)),
                     bbox=dict(pad=-2, facecolor="none", edgecolor="none"),
-                    ha="left", va="center", size=6)
- 
-    #legend_elements = [Line2D([0], [0], marker='o', color='w', label=f'Greater in {group1}',markerfacecolor=color_pos, markersize=8, linestyle=''),
-    #                   Line2D([0], [0], marker='o', color='w', label=f'Greater in {group2}',markerfacecolor=color_neg, markersize=8, linestyle='')]
-    #ax.legend(handles=legend_elements)
+                    ha="left", va="center", size=6, clip_on=False)
     
-    ax.text(0.95, 0.05, f'Greater in {group1}', color=color_pos, ha='right', va='top', transform=ax.transAxes, fontsize=10)
-    ax.text(0.05, 0.05, f'Greater in {group2}', color=color_neg, ha='left', va='top', transform=ax.transAxes, fontsize=10)
-    
-    pmax = math.ceil(np.max(plotlist[2]))
+    ax = ax0 if ax0 else ax1
+    ax.text(0.05, 0.05, f'Greater in {group2}', color=color_neg, ha='left', va='top', transform=ax.transAxes, fontsize=10, clip_on=False)
     
     ax.set_ylim(0.0)
+    pmax = math.ceil(np.nanmax(pvalues))
     y_ticks = np.logspace(-9, 0, 10, base=10.0)
     y_ticks = y_ticks[y_ticks > 2.0 ** (-pmax)]
     
+    ax.yaxis.tick_left()
     ax.set_yticks(-np.log2(y_ticks))
     ax.set_yticklabels(y_ticks)
     
+    ax = ax2 if ax2 else ax1
+    ax.text(0.95, 0.05, f'Greater in {group1}', color=color_pos, ha='right', va='top', transform=ax.transAxes, fontsize=10, clip_on=False)
+    
+    ax1.set_facecolor('none') # Stops covering part of text
+    
+    if ax0:
+        ax1.tick_params('y', length=0, color='w')
+        ax0.set_facecolor('none')
+    if ax2:
+        ax2.tick_params('y', length=0, color='w')
+        ax2.set_facecolor('none')
+ 
     if print_hits:
         print('greater in grp1:', pos_overFC)
         print('greater in grp2:', neg_overFC)
 
     if pdf:
-      pdf.savefig(dpi=DPI)
+        pdf.savefig(dpi=DPI)
     else:
-      plt.show()
+        plt.show()
     
     plt.close()
     

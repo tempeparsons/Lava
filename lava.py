@@ -35,20 +35,37 @@ DEFAULT_INDEX_COLS = ('Accession','Protein.ID','Protein ID')
 
 LOG_FILE = None
 
+ANSI_ESC= {'END':'\033[0m', 'BOLD':'\033[1m',
+           'ITALIC':'\033[2m', 'UNDERLINE':'\033[3m',
+           'BLACK':'\033[30m', 'RED':'\033[31m',
+           'GREEN':'\033[32m', 'YELLOW':'\033[33m',
+           'BLUE':'\033[34m', 'MAGENTA':'\033[35m',
+           'CYAN':'\033[36m', 'WHITE':'\033[37m',
+           'GREY':'\033[90m', 'LT_RED':'\033[91m',
+           'LT_GREEN':'\033[92m',  'LT_YELLOW':'\033[93m',
+           'LT_BLUE':'\033[94m', 'LT_MAGENTA':'\033[95m',
+           'LT_CYAN':'\033[96m', 'LT_WHITE':'\033[97m'}
+
+
+def _color(txt, cname='RED'):
+  
+    return f"{ANSI_ESC.get(cname, 'RED')}{txt}{ANSI_ESC['END']}"
+    
+
 def warn(txt):
    
-    _report('WARNING: ' + txt)
+    _report(_color('WARNING: ','YELLOW') + txt)
 
 
 def info(txt):
    
-    _report('INFO: ' + txt)
+    _report(_color('INFO: ', 'BLUE') + txt)
 
 
 def fail(txt):
    
-    _report('FAILURE: ' + txt)
-    _report('EXIT')
+    _report(_color('FAILURE: ', 'RED') + txt)
+    _report(_color('EXIT', 'RED'))
     sys.exit(0)
 
 
@@ -79,6 +96,54 @@ def _read_data(file_path):
     df = df.replace(0, np.nan)
     
     return df
+
+    
+def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
+   
+   # Rename more col headings, mark q95
+   # Colour excel table
+   
+   nmap = {'grp1grp2_FC':'-log2_fold_change', 'Tpvals':'-log2_pvalue'}
+   
+   quad_map = {(True,True):'HIT_pos', (True,False):'HIT_neg', (False,True):'fail_pos', (False,False):'fail_neg', }
+   
+   path_root, file_ext = os.path.splitext(save_path)
+   file_ext = file_ext.lower()
+   
+   keys = [f'{a}:{b}' for a,b in pairs]
+   for key in keys:
+       df = plotdict[key]
+       lfc = np.array(df['grp1grp2_FC'])
+       pvs = np.array(df['Tpvals'])
+       n = len(lfc)
+       
+       quad_cats = [quad_map[((pvs[i] >= p_thresh and (abs(lfc[i]) >= f_thresh)), lfc[i] >= 0)] for i in range(n)]
+       
+       fc = 2.0 ** (-lfc)
+       df.insert(0, 'fold_change', fc)
+       df.insert(0, 'hit_class', quad_cats)
+       df.sort_values(by=['pvals',], ascending=True, inplace=True)
+       df.rename(columns=nmap, inplace=True)
+   
+   if file_ext in FILE_EXTS_EXL:
+       with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
+           for key in keys:
+               plotdict[key].to_excel(writer, sheet_name=key.replace(':', '_vs_'))
+ 
+       
+       info(f'Saved tables to {save_path}')
+   
+   else:
+       if file_ext in ('.csv'):
+           sep = ','
+       else:
+           sep = '\t'
+           
+       for key in keys:
+           name = key.replace(':', '_vs_')
+           file_path = f'{path_root}_{name}{file_ext}'
+           plotdict[key].to_csv(file_path, sep=',', na_rep='nan', quotechar='"')
+           info(f'Saved table to {file_path}')
 
 
 def _read_exp_file(df, file_path):
@@ -269,7 +334,7 @@ def _check_cols(df, selection):
      return valid
      
     
-def lava(in_path, pdf_path=None, software=VALID_SOFTWARE, idx_cols=None,  ref_groups=None, col_groups=None, exp_path=None,
+def lava(in_path, pdf_path=None, table_path=None, software=VALID_SOFTWARE, idx_cols=None,  ref_groups=None, col_groups=None, exp_path=None,
          remove_contaminents=True, f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP, quiet=False, colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
          split_x=False, hit_labels=False, hq_only=False, print_hits=False):
     
@@ -531,106 +596,15 @@ def lava(in_path, pdf_path=None, software=VALID_SOFTWARE, idx_cols=None,  ref_gr
 
     plots.pvalFC_hists(plotdict, pdf)
 
-    #try:
-    #    splitxlist = util.get_splitxlist(key)
-    #
-    #except IndexError:
-    #    fail('x-axis range is not large enough for split x-axis. Remove the -x option')
-    
     for a, b in pairs:
         pair_name = f'{a}:{b}'
         plots.volcano(pdf, pair_name, plotdict[pair_name], q95dict[pair_name], f_thresh, p_thresh, colors,
-                      hq_only, hit_labels, print_hits, lw=0.25, ls='--')
- 
+                      split_x, hq_only, hit_labels, print_hits, lw=0.25, ls='--')
+    
+    if table_path:
+        save_volcano_table(pairs, plotdict, table_path, f_thresh, p_thresh)
     
     
-    """
-
-    if split_x:
-        fig, ax = plt.subplots(1, 3, figsize = (10,8), sharey=True)
-        fig.subplots_adjust(wspace=0.05)
-
-        a0 = ax.flat[0]
-        a1 = ax.flat[1]
-        a2 = ax.flat[2]
-
-        a0.set_xlim(splitxlist[0], splitxlist[1])
-        a1.set_xlim(splitxlist[2], splitxlist[3])
-        a2.set_xlim(splitxlist[4], splitxlist[5])
-
-        a1.axvline(FClim, ls=ls, c='k', alpha=0.5, lw=lw)
-        a1.axvline(-FClim, ls=ls, c='k', alpha=0.5, lw=lw)
-        for a in ax.flat:
-            a.axhline(pthresh,ls=ls, c='k', alpha=0.5, lw=lw)
-
-        a1.set_title(df_pair, fontsize=18)
-
-        a0.spines['right'].set_visible(False)
-        a1.spines['left'].set_visible(False)
-        a1.spines['right'].set_visible(False)
-        a2.spines['left'].set_visible(False)
-
-        d = .8
-        kwargs = dict(marker=[(-1, -d), (1, d)], markersize=8,
-                      linestyle="none", color='k', mec='k', mew=1, clip_on=False)
-        a0.plot([1,1], [1,0], transform=a0.transAxes, **kwargs)
-        a1.plot([0,0], [1,0], [1,1], [1,0], transform=a1.transAxes, **kwargs)
-        a2.plot([0,0], [0,1], transform=a2.transAxes, **kwargs)
-        a0.yaxis.tick_left()
-        a0.set_ylabel('-log2 transformed p-value')
-        a1.set_xlabel('log2 fold change')
-        a2.yaxis.tick_right()
-        a1.tick_params(axis='y', which='both',length=0)
-        a1.set_yticks([])
-        a2.yaxis.set_label_position("right")
-        a2.set_yticks([0,5,10,15,20,25,30,35,40,45,50,55])
- 
-        for a in ax.flat:
-            a.scatter(plotlist[1], plotlist[2], s=8, color='w', edgecolors='darkgrey', lw=lw)
-
-        marker_text = []
-
-        for i, name in enumerate(plotlist[0]):
-
-            if name in markers:
-                marker_text.append((plotlist[1][i], plotlist[2][i], name))
-                for a in ax.flat:
-                    a.scatter(plotlist[1][i], plotlist[2][i], s=3, color='k')
-
-            if plotlist[1][i] >= FClim and plotlist[2][i] >= pthresh:
-                pos_overFC.append(name)
-                for a in ax.flat:
-                    a.scatter(plotlist[1][i], plotlist[2][i], s=10, color=color_pos)
-                if label_significant_proteins:
-                    a1.annotate(name, xy=(plotlist[1][i], plotlist[2][i]), fontsize=6)
-                    a2.annotate(name, xy=(plotlist[1][i], plotlist[2][i]), fontsize=6)
-
-            if plotlist[1][i] <= -FClim  and plotlist[2][i] >= pthresh:
-                neg_overFC.append(name)
-                for a in ax.flat:
-                    a.scatter(plotlist[1][i], plotlist[2][i], s=10, color=color_neg)
-                if label_significant_proteins:
-                    a0.annotate(name, xy=(plotlist[1][i], plotlist[2][i]), fontsize=6)
-                    a1.annotate(name, xy=(plotlist[1][i], plotlist[2][i]), fontsize=6)
-
-            if not plot_high_quality_only:
-                if plotlist[3][i] == q951 or plotlist[4][i] == q952:
-                    for a in ax.flat:
-                        a.scatter(plotlist[1][i], plotlist[2][i], s=6, color=color_low)
-
-
-        for tx in marker_text:
-            for a in ax.flat:
-                a.annotate(tx[2], xy=(tx[0], tx[1]),  xytext=(tx[0], tx[1]),
-                        arrowprops=dict(arrowstyle='-', fc="k", ec="k", lw=0.5, relpos=(0.25, 0.5)),
-                        bbox=dict(pad=-2, facecolor="none", edgecolor="none"),
-                        ha="left", va="center", size=6)
-
-        legend_elements = [Line2D([0], [0], marker='o', color='w', label='greater in grp1', markerfacecolor=color_pos, markersize=8, linestyle=''),
-                           Line2D([0], [0], marker='o', color='w', label='greater in grp2', markerfacecolor=color_neg, markersize=8, linestyle='')]
-        a1.legend(handles=legend_elements)
-
-    """
     if pdf:
         pdf.close()
         info('Wrote PDF output to {}'.format(pdf_path))    
@@ -655,12 +629,17 @@ def main(argv=None):
     # Do we allow multiple (similar) inputs? ' ; nargs='+'
     arg_parse.add_argument(metavar='INPUT_FILE', dest='d',
                            help='The input file path to read data from; the DIA results text file (protein-level, not peptide-level)')
-    
+ 
+    arg_parse.add_argument('-g', '--graphics-pdf', dest="g", metavar='PDF_FILE_PATH', default=None,
+                           help=f"Optional path to save graphs as a PDF file. If not specified graphics will be plotted to screen.")
+ 
+    arg_parse.add_argument('-o', '--out-table', dest="o", metavar='TABLE_FILE_PATH', default=None,
+                           help=f"Optional save file path for volcano plot results. The output format is determined by the file extansion; " \
+                                "'.xlsx' or '.xls' saves as Excel spreadsheets, '.csv' saves as comma-separated text, and anything else as tab-separated text " \
+                                "For text formats, different comparison/volcano plots are saved in separate files, labelled with the groups compared.")
+   
     arg_parse.add_argument('-s', '--software', dest="s", metavar='SOFTWARE', default=None,
                            help=f"The name of the software used to process the data. Available choices: {' ,'.join(VALID_SOFTWARE)}. Deafult: {DEFAULT_SOFTWARE}")
-
-    arg_parse.add_argument('-o', '--out-pdf', dest="o", metavar='FILE_PATH', default=None,
-                           help=f"Optional path to save graphs as a PDF file. If not specified graphics will be plotted to screen.")
 
     arg_parse.add_argument('-k', '--ignore-contaminants',dest="k",  default=False, action='store_true',
                            help='Whether to ignore kerating and other contaminants. If NOT set contaminents will be removed.')
@@ -712,8 +691,10 @@ def main(argv=None):
     arg_parse.add_argument('--low-color', dest="low-color", metavar='COLOR', default=DEFAULT_LOW_COLOR,
                            help=f'Optional color specification (used by matplotlib) insignificant points on volcano plots, e.g. "grey" or "#808080". Default: {DEFAULT_LOW_COLOR}')
 
-    arg_parse.add_argument('--split-x', dest="split-x", action='store_true',
-                           help='Use to split the X-axis on volcano plots; useful if you expect a wide range of fold-changes')
+    arg_parse.add_argument('-sx', '--split-x', dest="sx", metavar='XGAP_WIDTH', type=float, default=0.0,
+                           help='Optionally split the X-axis (fold change) on volcano plots if the largest gap between data points on ' \
+                                'the postive and/or negative side is larger than the value (in axis units) specified here; useful if ' \
+                                'you expect a wide range of fold-changes')
 
     arg_parse.add_argument('--no-labels', dest="no-labels", action='store_true',
                            help='If set, suppress the labelling of significant hits in the volcano plots')
@@ -725,26 +706,12 @@ def main(argv=None):
 
     arg_parse.add_argument('--print-hits', dest="print-hits", action='store_true',
                            help='If set, causes the names of the significant hits to be printed below the volcano plots.')
-  
-    # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # 
-    # Export proteins in each quadrant ; 4 lists for each comparison
-    # Export table of log2FC, FC and p-values
-    # Add parameters/setup page, summary of groups and group pairing
-    # Add CLI text colors
-    
-    # (M) Add file path detection in col names ; auto-truncation
-    # (M) Add markers : list of index col ids to highlight
-    # (M) Add grouping info to xy correlation plots
-    
-    # (E) Tweak volcanos; unlogged axis labels 
-    # (H) Split volcanos
-            
-    # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # 
     
     args = vars(arg_parse.parse_args(argv))
  
     in_path = args['d']
-    pdf_path = args['o']
+    pdf_path = args['g']
+    table_path = args['o']
     software = args['s']
     remove_contaminents = not args['k']
     idx_cols = args['i']
@@ -756,7 +723,7 @@ def main(argv=None):
     quiet = args['q']
     log = args['l']
     
-    split_x = args['split-x']
+    split_x = args['sx']
     
     pos_color = args['pos-color']
     neg_color = args['neg-color']
@@ -806,8 +773,18 @@ def main(argv=None):
     
     colors = (pos_color, neg_color, low_color)
     
-    lava(in_path, pdf_path, software, idx_cols, ref_groups, columns, exp_path, remove_contaminents,
+    lava(in_path, pdf_path, table_path, software, idx_cols, ref_groups, columns, exp_path, remove_contaminents,
          f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, print_hits)
+  
+    # # # # # # # # # # # # # # # # # # # # # # #  # # # # # #    
+    # Export table mark q95, check q95 rendering on volcano
+    # Add parameters/setup page, summary of groups and group pairing, exact command
+    #  - adapt from CLI out
+    
+    # (M) Add file path detection in col names ; auto-truncation
+    # (M) Add markers : list of index col ids to highlight
+    # (M) Add grouping info to xy correlation plots           
+    # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # 
 
 
 if __name__ == '__main__':
