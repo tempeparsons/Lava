@@ -46,9 +46,9 @@ def plot_sums_means_nans(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080
     plt.subplots_adjust(hspace=0.35, bottom=0.1, top=0.95, right=0.95)
     
     if pdf:
-      pdf.savefig(dpi=DPI)
+        pdf.savefig(dpi=DPI)
     else:
-      plt.show()
+        plt.show()
     
     plt.close()
     
@@ -69,15 +69,15 @@ def boxplots(df, value_cols, pdf, scatter_colors=['#D00000','#A0A000','#0080FF']
     nc = len(value_cols)
     
     for i, col in enumerate(value_cols):
-      y_vals = np.sort(df[col])
-      
-      # Random but avoidung clumps
-      dx = np.random.uniform(scatter_width/4, scatter_width/2, len(y_vals))
-      x_vals = i + (np.cumsum(dx) % scatter_width) - scatter_width/2
-      
-      color = scatter_colors[i % ns]
-      ax2.scatter(x_vals, y_vals, color=color, alpha=0.4, s=5)
-    
+        y_vals = np.sort(df[col])
+ 
+        # Random but avoidung clumps
+        dx = np.random.uniform(scatter_width/4, scatter_width/2, len(y_vals))
+        x_vals = i + (np.cumsum(dx) % scatter_width) - scatter_width/2
+ 
+        color = scatter_colors[i % ns]
+        ax2.scatter(x_vals, y_vals, color=color, alpha=0.4, s=5)
+ 
     x_ticks = np.arange(0, nc)   
     ax2.set_xlim(-0.5, nc-0.5)  
     ax2.set_xticks(x_ticks)
@@ -88,9 +88,9 @@ def boxplots(df, value_cols, pdf, scatter_colors=['#D00000','#A0A000','#0080FF']
     plt.subplots_adjust(hspace=0.35, top=0.90, bottom=0.1, left=0.05, right=0.95)    
     
     if pdf:
-      pdf.savefig(dpi=DPI)
+        pdf.savefig(dpi=DPI)
     else:
-      plt.show()
+        plt.show()
     
     plt.close()
     
@@ -138,21 +138,13 @@ def histograms(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], nbin
             ax.set_visible(False)
 
     ax.set_ylim(0.0)
-    """
-    df.hist(column=value_cols, 
-            alpha=0.5, 
-            bins=50, 
-            grid=True, 
-            sharex=True, sharey=True, 
-            xlabelsize=6, ylabelsize=6,
-            figsize=(9,9))
-    """
+    
     plt.subplots_adjust(hspace=0.05, wspace=0.05, top=0.95, bottom=0.1, left=0.1, right=0.95) 
     
     if pdf:
-      pdf.savefig(dpi=DPI)
+        pdf.savefig(dpi=DPI)
     else:
-      plt.show()
+        plt.show()
     
     plt.close()
         
@@ -193,10 +185,7 @@ def xy_plots(df, value_cols, ncols, pdf, colors=['#0080FF','#A0A000','#D00000'],
                     cmap = cmap0
                 
                 ax.hexbin(data1[valid], data2[valid], cmap=cmap, gridsize=gridsize, mincnt=1, edgecolors='none')
- 
-                #txt = ax.text(0.05, 0.9, f'{cols[i]} vs {cols[j]}', transform=ax.transAxes, fontsize=12)
-                #txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
- 
+
                 if i > j:
                     txt = ax.text(0.5, 0.5, f'{rho:.2}', ha='center', va='center', transform=ax.transAxes, fontsize=1.5*fontsize)
                     txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
@@ -218,27 +207,12 @@ def xy_plots(df, value_cols, ncols, pdf, colors=['#0080FF','#A0A000','#D00000'],
                 ax.yaxis.set_label_position('right')     
                 ax.set_ylabel(f'{cols[i]}', fontsize=fontsize)
 
-    """
-    nrows = df.shape[1] // ncols + (df.shape[1] % ncols > 0)
-    cols = value_cols
-    fig, axs = plt.subplots(nrows, ncols, figsize=(9,9), sharex=True, sharey=True)
-    for i in range(len(cols)-1):
-        axs.flat[i].scatter(df[cols[i]], df[cols[i+1]], s=5, alpha=0.6)
-        txt = axs.flat[i].set_title(f'{cols[i]} vs {cols[i+1]}', fontsize=8)
-        txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
-        ymin, ymax = axs.flat[i].get_ylim()
-        axs.flat[i].axline([ymax*0.5,ymax*0.5], slope=1, c='r', lw=0.5)    
-    # switch off unused axes
-    for i in range(len(value_cols)-1, nrows*ncols):
-        axs.flat[i].set_visible(False)
-    """
-        
     plt.subplots_adjust(wspace=0.0, hspace=0.0, top=0.95, bottom=0.05, left=0.05, right=0.95)
     
     if pdf:
-      pdf.savefig(dpi=DPI)
+        pdf.savefig(dpi=DPI)
     else:
-      plt.show()
+        plt.show()
     
     plt.close()
 
@@ -302,9 +276,9 @@ def correlation_plot(df, value_cols, pdf, colors=['#0080FF','#A0A000','#D00000']
         ax.set_yticklabels([])
     
     if pdf:
-      pdf.savefig(dpi=DPI)
+        pdf.savefig(dpi=DPI)
     else:
-      plt.show()
+        plt.show()
     
     plt.close()
 
@@ -369,25 +343,25 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
     plt.subplots_adjust(wspace=0.15, hspace=0.1, top=0.95, bottom=0.05, left=0.1, right=0.95)
 
     if pdf:
-      pdf.savefig(dpi=DPI)
+        pdf.savefig(dpi=DPI)
     else:
-      plt.show()
+        plt.show()
     
     plt.close()
 
 
 def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000','#D00000'],
-            split_x=True, hq_only=False, hit_labels=True, print_hits=True, markers=None,
+            split_x=True, hq_only=False, hit_labels=True, markers=None,
             lw=0.25, ls='--', lcolor='#808080', max_size=160.0, minsize=8.0):
     
     colors=['#0080FF','#A0A000','#D00000']
     cmap = LinearSegmentedColormap.from_list('volc', colors)
     
-    group1, group2 = pair_name.split(':')
+    group1, group2 = pair_name.split(':::')
     q951, q952 = q95
     
     if not markers:
-      markers = []
+        markers = []
       
     datacols = [df.index, df['grp1grp2_FC'], df['Tpvals'], df['Tpvals_q95'], df['zstd_grp1_q95'], df['zstd_grp2_q95']]
 
@@ -509,7 +483,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     fig.subplots_adjust(wspace=0.05)
     fig.set_clip_on(False)
     
-    ax1.set_title(pair_name, fontsize=18)
+    ax1.set_title(pair_name.replace(':::',' vs '), fontsize=18)
     ax1.set_xlabel('log2 fold change')
     
     pnorm = np.array(plotlist[1])
@@ -564,9 +538,10 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
             ax = ax1  
         
         if name in markers:
-            marker_text.append((x, y, name))
-            ax.scatter(x, y, s=3, color='k', edgecolor='k', clip_on=False)
-
+            marker_text.append((x, y, ds, name))
+            ax.scatter(x, y, s=size, color='k', edgecolor='k', clip_on=False)
+            continue
+        
         if x >= FClim and y >= pthresh:
             pos_overFC.append(name)
             ax.scatter(x, y, s=size, color=cmap(weights[i]), edgecolor='k', linewidth=0.5, clip_on=False)
@@ -574,6 +549,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
                 for a in (ax0, ax1, ax2):
                   if not a:
                     continue
+                  
                   txt = a.annotate(name, xy=(x, y), xytext=(ds, ds), fontsize=6, textcoords='offset points', clip_on=False)
                   txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
  
@@ -591,11 +567,10 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
             if plotlist[3][i] == q951 or plotlist[4][i] == q952:
                 ax.scatter(x, y, s=6, color=color_low)
         
-    for tx in marker_text:
-            txt = ax.annotate(tx[2], xy=(tx[0], tx[1]),  xytext=(tx[0], tx[1]),
-                    arrowprops=dict(arrowstyle='-', fc="k", ec="k", lw=0.5, relpos=(0.25, 0.5)),
-                    bbox=dict(pad=-2, facecolor="none", edgecolor="none"),
-                    ha="left", va="center", size=6, clip_on=False)
+    for x, y, ds, name in marker_text:
+         txt = ax.annotate(name, xy=(x, y), xytext=(ds, ds), textcoords='offset points',#arrowprops=dict(arrowstyle='-', fc="k", ec="k", lw=0.5, relpos=(0.25, 0.5)), bbox=dict(pad=-2, facecolor="none", edgecolor="none"),
+                          fontsize=6, clip_on=False)
+         txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
     
     ax = ax0 if ax0 else ax1
     ax.text(0.05, 0.05, f'Greater in {group2}', color=color_neg, ha='left', va='top', transform=ax.transAxes, fontsize=10, clip_on=False)
@@ -620,10 +595,6 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     if ax2:
         ax2.tick_params('y', length=0, color='w')
         ax2.set_facecolor('none')
- 
-    if print_hits:
-        print('greater in grp1:', pos_overFC)
-        print('greater in grp2:', neg_overFC)
 
     if pdf:
         pdf.savefig(dpi=DPI)

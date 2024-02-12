@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, textwrap, re
 import numpy as np
 import pandas as pd
 
@@ -7,11 +7,13 @@ from collections import defaultdict
 from matplotlib import pyplot as plt
 from matplotlib.colors import is_color_like
 from matplotlib.backends.backend_pdf import PdfPages
+import matplotlib.patheffects as PathEffects
+from matplotlib.colors import LinearSegmentedColormap
 
 import lava_util as util
 import lava_plots as plots
 
-VERSION = 0.1
+VERSION = '0.2.0'
 
 # Allow shirt codes for software
 SOFT_DN = ('DIANN', 'DN')
@@ -95,6 +97,44 @@ def _read_data(file_path):
   
     df = df.replace(0, np.nan)
     
+    # Check for paths as column names
+    
+    cols = list(df.columns)
+    n_map = {}
+    rep_count = defaultdict(int)
+    
+    for col in cols:
+        
+        if len(col) > 32:
+            orig = col
+            match_obj_nix = re.search('\/.*?\.[\w:]+', col)
+            match_obj_win = re.search(r'\\.*?\.[\w:]+', col)
+            
+            if match_obj_nix or match_obj_win:
+               if match_obj_win:
+                 dirsep = '\\'
+               else:
+                 dirsep = '/'  
+               
+               parts = col.split(dirsep)[::-1] # last first
+               i = 0
+               col = parts[0]
+               
+               while (len(col) < 8) and (i+1 < len(parts)):
+                 i += 1
+                 col = parts[i] + dirsep + col
+               
+               prefix = col
+               j = 0
+               while cols.count(col) > 1: # duplicate
+                   j += 1
+                   col = f'{prefix}_{j}'              
+               
+               n_map[orig] = col
+    
+    if n_map:
+       df.rename(columns=nmap, inplace=True)
+    
     return df
 
     
@@ -103,14 +143,16 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
    # Rename more col headings, mark q95
    # Colour excel table
    
-   nmap = {'grp1grp2_FC':'-log2_fold_change', 'Tpvals':'-log2_pvalue'}
+   nmap = {'grp1grp2_FC':'-log2_fold_change', 'Tpvals':'-log2_pvalue',
+           'pvals':'p-value', 'Tpvals_q95':'-log2_Q95_pvalue',
+           'zstd_grp1_q95':'Q95_sigma_A','zstd_grp1_q95':'Q95_sigma_B',}
    
    quad_map = {(True,True):'HIT_pos', (True,False):'HIT_neg', (False,True):'fail_pos', (False,False):'fail_neg', }
    
    path_root, file_ext = os.path.splitext(save_path)
    file_ext = file_ext.lower()
    
-   keys = [f'{a}:{b}' for a,b in pairs]
+   keys = [f'{a}:::{b}' for a,b in pairs]
    for key in keys:
        df = plotdict[key]
        lfc = np.array(df['grp1grp2_FC'])
@@ -128,7 +170,7 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
    if file_ext in FILE_EXTS_EXL:
        with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
            for key in keys:
-               plotdict[key].to_excel(writer, sheet_name=key.replace(':', '_vs_'))
+               plotdict[key].to_excel(writer, sheet_name=key.replace(':::', '_vs_'))
  
        
        info(f'Saved tables to {save_path}')
@@ -140,7 +182,7 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
            sep = '\t'
            
        for key in keys:
-           name = key.replace(':', '_vs_')
+           name = key.replace(':::', '_vs_')
            file_path = f'{path_root}_{name}{file_ext}'
            plotdict[key].to_csv(file_path, sep=',', na_rep='nan', quotechar='"')
            info(f'Saved table to {file_path}')
@@ -234,84 +276,7 @@ def _split_col_groups(df, group_spec):
         group_dicts.append(group_dict)
 
     return group_dicts
-    
-
-def _ask_user_col_idx_groups(cols, idx_cols, ref_groups, col_groups):
-    
-    n_cols = len(cols)
-    _report('\nAvailable column numbers and names:')
-
-    for i, col in enumerate(cols, 1):
-        _report(f'  {i:>3} : {col}')
-    
-    if not idx_cols:
-        idx_col = True
- 
-        while idx_col:
-          idx_col = input('\rPlease enter number for index column [or blank to exit] and press <RETURN>:').strip()
- 
-          if idx_col.isdigit():
-              if 0 < int(idx_col) <= n_cols:
-                  idx_col = int(idx_col)
-                  break
-              else:
-                  warn(f'Index column "{idx_col}" invalid')
- 
-          else:
-              warn('Index column selection must be a number')
- 
-        if not idx_col:
-            fail(f'No index column specified')
         
-        idx_cols = [idx_col]
-
-    if not ref_groups:
-        ref_group = True
- 
-        while ref_group:
-          ref_group = input('\rPlease enter number for reference column [or blank to exit] and press <RETURN>:').strip()
- 
-          if ref_group.isdigit():
-              if 0 < int(ref_group) <= n_cols:
-                  ref_group = int(ref_group)
-                  break
-              else:
-                  warn(f'Reference column "{ref_group}" invalid')
- 
-          else:
-              warn('Reference column selection must be a number')
-        
-        ref_groups = [ref_group]
-    
-    if not col_groups:
-        col_groups = []
-        group = True
-        g = 1
- 
-        while group:
-            group = input(f'\r{group} Please enter column numbers for a group {g} [or blank to finish] and press <RETURN>:').strip()
- 
-            for x in group:
-                if x not in '0123456789 ':
-                    warn('Please use only digits and spaces')
-                    break
-            else:
-                group = [int(x) for x in group.split()]
- 
-                for x in group:
-                    if not (0 < x <= n_cols):
-                        warn(f'Column number {x} invalid')
-                        break
- 
-                else:
-                    col_groups.append(group)
-                    g += 1
- 
-    if not col_groups:
-        fail(f'No column groups specified')
-    
-    return idx_cols, ref_groups, col_groups
-    
 
 def _check_cols(df, selection):
      
@@ -333,25 +298,66 @@ def _check_cols(df, selection):
      
      return valid
      
+ 
+def _check_path(file_path, should_exist=True):
     
-def lava(in_path, pdf_path=None, table_path=None, software=VALID_SOFTWARE, idx_cols=None,  ref_groups=None, col_groups=None, exp_path=None,
-         remove_contaminents=True, f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP, quiet=False, colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
-         split_x=False, hit_labels=False, hq_only=False, print_hits=False):
+    if file_path is not None:
+       file_path = os.path.abspath(file_path)
+ 
+       if should_exist:
+          if not os.path.exists(file_path):
+              fail(f'File "{file_path}" does not exist')
+ 
+          elif not os.path.isfile(file_path):
+              fail(f'Location "{file_path}" is not a regular file')
+ 
+          elif os.stat(file_path).st_size == 0:
+              fail(f'File "{file_path}" is of zero size')
+ 
+          elif not os.access(file_path, os.R_OK):
+              fail(f'File "{file_path}" is not readable')
     
-    info(f'Lava version {VERSION}')
+    return file_path
+
+    
+def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table_path=None,
+         idx_cols=None, ref_groups=None, markers=None, col_groups=None, remove_contaminents=True,
+         f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP, quiet=False,
+         colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
+         split_x=False, hit_labels=False, hq_only=False):
+    
+    in_path = _check_path(in_path)
+    exp_path = _check_path(exp_path)
+    pdf_path = _check_path(pdf_path)
+    table_path = _check_path(table_path)
     
     if pdf_path:
         pdf = PdfPages(pdf_path)
     else:
         pdf = None
     
+    info(f'Lava version {VERSION}')    
+    
+    option_report = [(f'Lava Report version {VERSION}', None),
+                     ('Input options', ' '.join(sys.argv[1:])),
+                     ('Input data file',in_path),
+                     ('Exp. design file',exp_path),
+                     ('PDF output file',pdf_path),
+                     ('Table output file',table_path),
+                     ('Input software', software),
+                     ('Min. fold-change',f_thresh),
+                     ('Max. p-value', f'{p_thresh:.2f}%'),
+                     ('Remove contaminents',remove_contaminents),
+                     ('Split volcano X-axis',split_x),
+                     ('Show hit labels',hit_labels),
+                     ('Show high quality',hq_only)]
+        
     color_pos, color_neg, color_low =   colors
     df =  _read_data(in_path)
     cols = list(df.columns)
     n_cols = len(cols)
     
-    # Read from group file if possible
-    if exp_path:
+    if exp_path:  # Read from exp design file if possible
         group_dicts = _read_exp_file(df, exp_path)
    
     elif col_groups:
@@ -367,11 +373,7 @@ def lava(in_path, pdf_path=None, table_path=None, software=VALID_SOFTWARE, idx_c
       
         if not idx_cols:
             fail('No valid index columns found after falling back to default; {' '.join(DEFAULT_INDEX_COLS)}')
-    
-    #### Change to Tkinter GUI
-    #if not col_groups or not idx_cols: # Prompt at command line
-    #    idx_cols, ref_groups, col_groups = _ask_user_col_idx_groups(cols, idx_cols, ref_groups, col_groups)
-        
+            
     if not idx_cols:
         fail('No index column specified')
 
@@ -381,15 +383,37 @@ def lava(in_path, pdf_path=None, table_path=None, software=VALID_SOFTWARE, idx_c
     for idx_col in idx_cols:
         info(f'Using index column {cols.index(idx_col)+1} : "{idx_col}"')
     
-    df.set_index(idx_cols, inplace=True)
+    option_report.append(('Index column(s)', ' '.join(idx_cols)))
     
-    info('Sample column groups for comparison:')
+    # Markers
+    
+    if markers:
+        avail_idx = set()
+        for idx_col in idx_cols:
+            avail_idx.update(df[idx_col])
+        
+        valid = []    
+        for marker in markers:
+           if marker not in avail_idx:
+               warn(f'Marker "{marker}" is not present in index')
+           else:
+               valid.append(marker)
+        
+        markers = valid
+    
+    df.set_index(idx_cols, inplace=True)
+        
+        
+    msg = 'Sample group membership'
+    info(msg)
+    option_report.append((msg, None))
     value_cols = []
     
     groups = set()
     group_cols = {}
     for i, group_dict in enumerate(group_dicts):
        info(f'Comparison {i+1}:')
+       option_report.append(('Comparison', f'{i+1}'))
        
        for gname in sorted(group_dict):
            cols = group_dict[gname]
@@ -405,6 +429,7 @@ def lava(in_path, pdf_path=None, table_path=None, software=VALID_SOFTWARE, idx_c
        
            groups.add(gname)
            info(f'    Group "{gname}": {" ".join(cols)}')
+           option_report.append((f'Group "{gname}"', " ".join(cols)))
            
            for col in cols:
               if col not in value_cols:
@@ -418,15 +443,20 @@ def lava(in_path, pdf_path=None, table_path=None, software=VALID_SOFTWARE, idx_c
     if ref_groups:
         ref_groups = set(ref_groups)
         info(f'Reference sample groups:  {" ".join(ref_groups)}')
-        
+        option_report.append(('Ref. sample groups', " ".join(ref_groups)))
+
+
         for ref_group in ref_groups:
            if ref_group not in groups:
                fail('Reference sample group "{ref_group}" not found in experimental design. Available group names: {' '.join(sorted(groups))}')
     
     else:
         info(f'No reference groups specified')
+        option_report.append(('Reference sample groups', 'None specified'))
     
-    info(f'The comparisons will be made between the folloing pairs of sample groups:')
+    info(f'The comparisons will be made between the following pairs of sample groups:')
+    option_report.append(('Group pairs compared', None))
+    
     pairs = []
     
     for group_dict in group_dicts:
@@ -439,6 +469,7 @@ def lava(in_path, pdf_path=None, table_path=None, software=VALID_SOFTWARE, idx_c
                 for g2 in non_ref:
                     info(f'   {g1}  -  {g2}')
                     pairs.append((g1, g2))
+                    option_report.append((f'Pair {len(pairs)}', f'{g1}  vs  {g2}'))
           
         else:
             groups = sorted(groups)
@@ -446,6 +477,7 @@ def lava(in_path, pdf_path=None, table_path=None, software=VALID_SOFTWARE, idx_c
                 for g2 in groups[i+1:]:
                     info(f'   {g1}  -  {g2}')
                     pairs.append((g1, g2))
+                    option_report.append((f'Pair {len(pairs)}', f'{g1}  vs  {g2}'))
          
     pre_cull = df.shape
     
@@ -463,10 +495,86 @@ def lava(in_path, pdf_path=None, table_path=None, software=VALID_SOFTWARE, idx_c
 
     culled_rows = pre_cull[0] - post_cull[0]
     info(f'Removed {culled_rows} contaminant rows from {pre_cull[0]} total')
+    option_report.append((f'Contaminent rows', pre_cull[0]))
     
     if not quiet:
-      info('Your data now has the following structure:')
-      print(df.head(10))
+        info('Your data now has the following structure:')
+        print(df.head(10))
+    
+    if pdf:
+        font_height = 0.16 # = 11 pt
+        wrap_len = 90
+        
+        n_lines = 0
+        y = font_height
+        y_offsets = []
+        for i, (head, value) in enumerate(option_report):
+          y_head = y + font_height
+          
+          if isinstance(value, str) and len(value) > wrap_len:
+              sub_lines = textwrap.wrap(value, width=wrap_len)
+              m = len(sub_lines)
+              n_lines += m
+              option_report[i] = (head, '\n'.join(sub_lines))
+              y += font_height * m
+          
+          else:
+              n_lines += 1
+              y += font_height
+          
+          if value is None:
+              y += 0.3 * font_height
+              y_head += 0.3 * font_height
+          
+          y_offsets.append((y, y_head))
+                 
+        fig_height = y_offsets[-1][0] + 2 * font_height
+        fig, ax = plt.subplots(figsize=(8.0, fig_height))
+        margin = font_height/fig_height
+        
+        for i, (head, value) in enumerate(option_report):
+        
+            if value is None:
+              text = f'{head}'
+              hcolor = '#0080FF'
+              
+            else:
+              hcolor= '#400000'
+            
+              if isinstance(value, bool):
+                  value = 'Yes' if value else 'No'
+ 
+              elif isinstance(value, int):
+                  value = f'{value:,}'
+ 
+              elif isinstance(value, float):
+                  value = f'{value:.2g}'
+              
+              text = f'{head} : {value}'
+            
+            y, y_head = y_offsets[i]
+              
+            y = 1.0 - (y/fig_height)
+            y_head = 1.0 - (y_head/fig_height)
+            
+            if value:
+               ax.text(0.2 - 0.5 * margin, y_head, head + ':', transform=ax.transAxes, color=hcolor, va='bottom', ha='right', fontsize=9.0)
+               ax.text(0.2, y, value, transform=ax.transAxes, va='bottom', ha='left', fontsize=9.0)
+            else:
+                
+               if i == 0:
+                   ax.text(0.0, y_head, head, transform=ax.transAxes, color=hcolor, va='bottom', ha='left', fontsize=16.0)
+                   ax.axhline(y_head, linewidth=1, color='#808080', alpha=0.5)         
+                
+               else:
+                   ax.text(0.0, y_head, head, transform=ax.transAxes, color=hcolor, va='bottom', ha='left', fontsize=11.0)
+        
+        ax.axhline(margin, linewidth=1, color='#808080', alpha=0.5)         
+        ax.axis('off')
+                
+        plt.subplots_adjust(top=1.0-margin, bottom=margin, left=margin, right=1.0-margin)  
+        pdf.savefig(dpi=300)
+         
     
     info('Plotting bulk properties')
     plots.plot_sums_means_nans(df, value_cols, pdf)
@@ -506,7 +614,7 @@ def lava(in_path, pdf_path=None, table_path=None, software=VALID_SOFTWARE, idx_c
         cols2 = group_cols[g2]
         df2 = df[cols1+cols2].copy()
         
-        key = f'{g1}:{g2}'
+        key = f'{g1}:::{g2}'
         FCdict[key] = [df2, cols1, cols2]
         Zdict[key]  = [df2, cols1, cols2]
  
@@ -597,9 +705,9 @@ def lava(in_path, pdf_path=None, table_path=None, software=VALID_SOFTWARE, idx_c
     plots.pvalFC_hists(plotdict, pdf)
 
     for a, b in pairs:
-        pair_name = f'{a}:{b}'
+        pair_name = f'{a}:::{b}'
         plots.volcano(pdf, pair_name, plotdict[pair_name], q95dict[pair_name], f_thresh, p_thresh, colors,
-                      split_x, hq_only, hit_labels, print_hits, lw=0.25, ls='--')
+                      split_x, hq_only, hit_labels, markers, lw=0.25, ls='--')
     
     if table_path:
         save_volcano_table(pairs, plotdict, table_path, f_thresh, p_thresh)
@@ -629,28 +737,17 @@ def main(argv=None):
     # Do we allow multiple (similar) inputs? ' ; nargs='+'
     arg_parse.add_argument(metavar='INPUT_FILE', dest='d',
                            help='The input file path to read data from; the DIA results text file (protein-level, not peptide-level)')
- 
-    arg_parse.add_argument('-g', '--graphics-pdf', dest="g", metavar='PDF_FILE_PATH', default=None,
-                           help=f"Optional path to save graphs as a PDF file. If not specified graphics will be plotted to screen.")
- 
-    arg_parse.add_argument('-o', '--out-table', dest="o", metavar='TABLE_FILE_PATH', default=None,
-                           help=f"Optional save file path for volcano plot results. The output format is determined by the file extansion; " \
-                                "'.xlsx' or '.xls' saves as Excel spreadsheets, '.csv' saves as comma-separated text, and anything else as tab-separated text " \
-                                "For text formats, different comparison/volcano plots are saved in separate files, labelled with the groups compared.")
-   
-    arg_parse.add_argument('-s', '--software', dest="s", metavar='SOFTWARE', default=None,
-                           help=f"The name of the software used to process the data. Available choices: {' ,'.join(VALID_SOFTWARE)}. Deafult: {DEFAULT_SOFTWARE}")
-
-    arg_parse.add_argument('-k', '--ignore-contaminants',dest="k",  default=False, action='store_true',
-                           help='Whether to ignore kerating and other contaminants. If NOT set contaminents will be removed.')
     
-    arg_parse.add_argument('-c', '--columns', dest="c", metavar='COLUMN_SELECTION', nargs='+', default=None,
-                           help='If not already specified within an experimental design file (-e), this option defines column/samples which should be grouped and compared. ' \
-                                'This option is designed for use within automated pipelines; for regular users the -e option should be easier. ' \
-                                'Column/sample groups are specified in the form "1,2,3:4,5,6:7,8,9  3,4:5,6:10,11", with numbers ' \
-                                'starting at 1, identifying the data column. Columns within the same group are joined with commas "," and '\
-                                'two or more groups to be compared with one another are joined with colons ":". Several comparisons may be ' \
-                                'specified, separated by spaces. Columns numbers may appear in multiple groups/comparisons.') 
+    arg_parse.add_argument('-e', '--experiment-table', dest="e", metavar='FILE_PATH', default=None, 
+                           help='The location of a experimental design file. This file is a tab or comma-separated text file containing a table ' \
+                                'that relates the name of the data samples (input columns) to which experimental groups they belong. ' \
+                                'Each line should first give the name of the input column and then list the groups (or categories) ' \
+                                'to which it belongs. Groups will be compared according to their order, i.e. comparisons are only ' \
+                                'made within the groups specified each one column of the experiment design table. ' \
+                                'Example contents: \n\nSample1\tControl\tFemale\nSample2\tControl\tMale\nSample3\tMutant\tFemale\nSample4\tMutant\tMale')
+   
+    arg_parse.add_argument('-s', '--software', dest="s", metavar='SOFTWARE', default=DEFAULT_SOFTWARE,
+                           help=f"The name of the software used to process the data present in the input file. Available choices: {' ,'.join(VALID_SOFTWARE)}. Deafult: {DEFAULT_SOFTWARE}")
 
     arg_parse.add_argument('-i', '--index-columns', dest="i", metavar='INDEX_COLUMN', default=None,
                            help=f'The names, or numbers starting from 1, of one or more input columns used to uniquely index the data rows. ' \
@@ -662,13 +759,27 @@ def main(argv=None):
                                 'When reference groups are present other relevant groups will be compared only to these references, and ' \
                                 'not among themselves. If there is no reference group all groups will be compared to all relavent others. ')
     
-    arg_parse.add_argument('-e', '--experiment-table', dest="e", metavar='FILE_PATH', default=None, 
-                           help='The location of a experimental design file. This file is a tab or comma-separated text file containing a table ' \
-                                'that relates the name of the data samples (input columns) to which experimental groups they belong. ' \
-                                'Each line should first give the name of the input column and then list the groups (or categories) ' \
-                                'to which it belongs. Groups will be compared according to their order, i.e. comparisons are only ' \
-                                'made within the groups specified each one column of the experiment design table. ' \
-                                'Example contents: \n\nSample1\tControl\tFemale\nSample2\tControl\tMale\nSample3\tMutant\tFemale\nSample4\tMutant\tMale')
+    arg_parse.add_argument('-m', '--marker-ids', dest="m", metavar='MARKER_ID', nargs='+',  default=None,
+                           help='An optional list of marker IDs/accessions to label on plots; must be space separated abd match values in the index columns (-i).')
+ 
+    arg_parse.add_argument('-g', '--graphics-pdf', dest="g", metavar='PDF_FILE_PATH', default=None,
+                           help=f"Optional path to save graphs as a PDF file. If not specified graphics will be plotted to screen.")
+ 
+    arg_parse.add_argument('-o', '--out-table', dest="o", metavar='TABLE_FILE_PATH', default=None,
+                           help=f"Optional save file path for volcano plot results. The output format is determined by the file extansion; " \
+                                "'.xlsx' or '.xls' saves as Excel spreadsheets, '.csv' saves as comma-separated text, and anything else as tab-separated text " \
+                                "For text formats, different comparison/volcano plots are saved in separate files, labelled with the groups compared.")
+
+    arg_parse.add_argument('-k', '--ignore-contaminants',dest="k",  default=False, action='store_true',
+                           help='Whether to ignore kerating and other contaminants. If NOT set contaminents will be removed.')
+    
+    arg_parse.add_argument('-c', '--columns', dest="c", metavar='COLUMN_SELECTION', nargs='+', default=None,
+                           help='If not already specified within an experimental design file (-e), this option defines column/samples which should be grouped and compared. ' \
+                                'This option is designed for use within automated pipelines; for regular users the -e option should be easier. ' \
+                                'Column/sample groups are specified in the form "1,2,3:4,5,6:7,8,9  3,4:5,6:10,11", with numbers ' \
+                                'starting at 1, identifying the data column. Columns within the same group are joined with commas "," and '\
+                                'two or more groups to be compared with one another are joined with colons ":". Several comparisons may be ' \
+                                'specified, separated by spaces. Columns numbers may appear in multiple groups/comparisons.') 
  
     arg_parse.add_argument('-l', '--log-status', dest="l", action='store_true',
                            help=f"When set, writes status information to a log file; th elog file path will be based on the input path.")
@@ -703,9 +814,6 @@ def main(argv=None):
                            help='If set, plot only the high-quality points on volcano plots. Otherwise low quality points ' \
                                  '(thous with s single data point in one group) will be plotted, albeit differently. Data points with only ' \
                                  'one value in both compared groups are never plotted.')
-
-    arg_parse.add_argument('--print-hits', dest="print-hits", action='store_true',
-                           help='If set, causes the names of the significant hits to be printed below the volcano plots.')
     
     args = vars(arg_parse.parse_args(argv))
  
@@ -716,6 +824,7 @@ def main(argv=None):
     remove_contaminents = not args['k']
     idx_cols = args['i']
     ref_groups = args['r']
+    markers = args['m']
     columns = args['c']
     exp_path = args['e']
     f_thresh = args['f']
@@ -730,7 +839,6 @@ def main(argv=None):
     low_color = args['low-color']
     hit_labels = not args['no-labels']
     hq_only = args['hq-only']
-    print_hits = args['print-hits']
     
     if log:
         file_root = os.path.splitext(in_path)[0]
@@ -773,17 +881,11 @@ def main(argv=None):
     
     colors = (pos_color, neg_color, low_color)
     
-    lava(in_path, pdf_path, table_path, software, idx_cols, ref_groups, columns, exp_path, remove_contaminents,
-         f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, print_hits)
+    lava(in_path, exp_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns,
+         remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only)
   
     # # # # # # # # # # # # # # # # # # # # # # #  # # # # # #    
     # Export table mark q95, check q95 rendering on volcano
-    # Add parameters/setup page, summary of groups and group pairing, exact command
-    #  - adapt from CLI out
-    
-    # (M) Add file path detection in col names ; auto-truncation
-    # (M) Add markers : list of index col ids to highlight
-    # (M) Add grouping info to xy correlation plots           
     # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # 
 
 
@@ -792,9 +894,8 @@ if __name__ == '__main__':
     main()
     
 """
-python3 lava.py VolcCLI_PD1.xlsx -o VolcCLI_PD1.pdf -e groups_example.txt -l 
-python3 lava.py VolcCLI_PD1.xlsx -o VolcCLI_PD1.pdf -e groups_example.txt -l -r A
-
+Example: 
+python3 lava.py VolcCLI_PD1.xlsx -o VolcCLI_PD1_out.xlsx -g VolcCLI_PD1.pdf -e groups_example.txt -l -r A -m P00918
 
 """
     
