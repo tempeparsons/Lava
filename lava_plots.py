@@ -123,7 +123,7 @@ def histograms(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], nbin
             n = len(data)
             #mu = np.mean(data)
             #sig = np.std(data)
-            t = f'n={n:,}'' # \n$\mu$={mu:.2}\n$\sigma$={sig:.2}'
+            t = f'n={n:,}' #'\n$\mu$={mu:.2}\n$\sigma$={sig:.2}'
             
             txt = ax.text(0.95, 0.9, t, ha='right', va='top', color=color, transform=ax.transAxes, fontsize=8)
             txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
