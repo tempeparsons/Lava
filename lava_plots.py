@@ -121,9 +121,9 @@ def histograms(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], nbin
             txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
             
             n = len(data)
-            mu = np.mean(data)
-            sig = np.std(data)
-            t = f'n={n:,}\n$\mu$={mu:.2}\n$\sigma$={sig:.2}'
+            #mu = np.mean(data)
+            #sig = np.std(data)
+            t = f'n={n:,}'' # \n$\mu$={mu:.2}\n$\sigma$={sig:.2}'
             
             txt = ax.text(0.95, 0.9, t, ha='right', va='top', color=color, transform=ax.transAxes, fontsize=8)
             txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
@@ -299,6 +299,7 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
     x0_max = 1.0 - x0_min
      
     for row, key in enumerate(keys):
+         title = key.replace(':::', ' vs ')
          df = plotdict[key]
          ax0 = axs[row, 0]
          ax1 = axs[row, 1]
@@ -310,8 +311,8 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
              ax0.set_title(f'P-value distrbutions', color=c0)    
              ax1.set_title(f'Fold change distributions', color=c1)
  
-         txt0 = ax0.text(0.05, 0.8, key, transform=ax0.transAxes, fontsize=12)
-         txt1 = ax1.text(0.05, 0.8, key, transform=ax1.transAxes, fontsize=12)
+         txt0 = ax0.text(0.05, 0.8, title, transform=ax0.transAxes, fontsize=12)
+         txt1 = ax1.text(0.05, 0.8, title, transform=ax1.transAxes, fontsize=12)
          txt0.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
          txt1.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
          
