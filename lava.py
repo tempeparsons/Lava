@@ -143,9 +143,9 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
    # Rename more col headings, mark q95
    # Colour excel table
    
-   nmap = {'grp1grp2_FC':'-log2_fold_change', 'Tpvals':'-log2_pvalue',
+   nmap = {'grp1grp2_FC':'log2_fold_change', 'Tpvals':'-log2_pvalue',
            'pvals':'p-value', 'Tpvals_q95':'-log2_Q95_pvalue',
-           'zstd_grp1_q95':'Q95_sigma_A','zstd_grp1_q95':'Q95_sigma_B',}
+           'zstd_grp1_q95':'Q95_sigma_A','zstd_grp2_q95':'Q95_sigma_B',}
    
    quad_map = {(True,True):'HIT_pos', (True,False):'HIT_neg', (False,True):'fail_pos', (False,False):'fail_neg', }
    
@@ -326,10 +326,10 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
          colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
          split_x=False, hit_labels=False, hq_only=False):
     
-    in_path = _check_path(in_path)
-    exp_path = _check_path(exp_path)
-    pdf_path = _check_path(pdf_path)
-    table_path = _check_path(table_path)
+    in_path = _check_path(in_path, should_exist=True)
+    exp_path = _check_path(exp_path, should_exist=True)
+    pdf_path = _check_path(pdf_path, should_exist=False)
+    table_path = _check_path(table_path, should_exist=False)
     
     if pdf_path:
         pdf = PdfPages(pdf_path)
@@ -345,7 +345,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
                      ('PDF output file',pdf_path),
                      ('Table output file',table_path),
                      ('Input software', software),
-                     ('Min. fold-change',f_thresh),
+                     ('Min. fold-change', 2.0 ** f_thresh),
                      ('Max. p-value', f'{p_thresh:.2f}%'),
                      ('Remove contaminents',remove_contaminents),
                      ('Split volcano X-axis',split_x),
@@ -742,53 +742,52 @@ def main(argv=None):
                            help='The location of a experimental design file. This file is a tab or comma-separated text file containing a table ' \
                                 'that relates the name of the data samples (input columns) to which experimental groups they belong. ' \
                                 'Each line should first give the name of the input column and then list the groups (or categories) ' \
-                                'to which it belongs. Groups will be compared according to their order, i.e. comparisons are only ' \
-                                'made within the groups specified each one column of the experiment design table. ' \
-                                'Example contents: \n\nSample1\tControl\tFemale\nSample2\tControl\tMale\nSample3\tMutant\tFemale\nSample4\tMutant\tMale')
+                                'to which it belongs. Groups will be compared according to their column position, i.e. comparisons are only ' \
+                                'made between the groups specified within one column of the experiment design table. ')
    
     arg_parse.add_argument('-s', '--software', dest="s", metavar='SOFTWARE', default=DEFAULT_SOFTWARE,
-                           help=f"The name of the software used to process the data present in the input file. Available choices: {' ,'.join(VALID_SOFTWARE)}. Deafult: {DEFAULT_SOFTWARE}")
-
+                           help=f"The name of the software used to process the data present in the input file. Available choices: {', '.join(VALID_SOFTWARE)}. Deafult: {DEFAULT_SOFTWARE}")
+    
+    default_idx = ' '.join(DEFAULT_INDEX_COLS)
     arg_parse.add_argument('-i', '--index-columns', dest="i", metavar='INDEX_COLUMN', default=None,
-                           help=f'The names, or numbers starting from 1, of one or more input columns used to uniquely index the data rows. ' \
-                                'If not specified columns named will be sought from the default list: {' '.join(DEFAULT_INDEX_COLS)}.')
+                           help=f'The names, or numbers starting from 1, of one or more input columns used to uniquely index the data rows. If not specified, column names will be sought from the default list: {default_idx}.')
 
     arg_parse.add_argument('-r', '--ref-groups', dest="r", metavar='GROUP_NAME', nargs='+',  default=None,
-                           help='An optional list of names specifiying which group(s) of samples/columns are considered reference groups.'
-                                'Typicaly this would include a control group. These names should match the group/category names in the experiment design file (-e). ' \
+                           help='An optional list of names specifiying which group(s) of samples/columns are considered reference groups. '
+                                'Typicaly this would include any control group. These names should match the group/category names in the experiment design file (-e). ' \
                                 'When reference groups are present other relevant groups will be compared only to these references, and ' \
-                                'not among themselves. If there is no reference group all groups will be compared to all relavent others. ')
+                                'not among themselves. If there is no reference group then all groups will be compared to all relavent others. ')
     
     arg_parse.add_argument('-m', '--marker-ids', dest="m", metavar='MARKER_ID', nargs='+',  default=None,
-                           help='An optional list of marker IDs/accessions to label on plots; must be space separated abd match values in the index columns (-i).')
+                           help='An optional list of marker IDs/accessions to label on plots; these must be space separated and match values in the index columns (-i).')
  
     arg_parse.add_argument('-g', '--graphics-pdf', dest="g", metavar='PDF_FILE_PATH', default=None,
                            help=f"Optional path to save graphs as a PDF file. If not specified graphics will be plotted to screen.")
  
     arg_parse.add_argument('-o', '--out-table', dest="o", metavar='TABLE_FILE_PATH', default=None,
-                           help=f"Optional save file path for volcano plot results. The output format is determined by the file extansion; " \
-                                "'.xlsx' or '.xls' saves as Excel spreadsheets, '.csv' saves as comma-separated text, and anything else as tab-separated text " \
-                                "For text formats, different comparison/volcano plots are saved in separate files, labelled with the groups compared.")
+                           help=f"Optional save file path for volcano plot results. The output format is determined by the file extension; " \
+                                "'.xlsx' or '.xls' saves as Excel spreadsheets, '.csv' saves as comma-separated text, and anything else as tab-separated text. " \
+                                "For simple textual formats, different comparison/volcano reults are saved in separate files, labelled according to the groups compared.")
 
     arg_parse.add_argument('-k', '--ignore-contaminants',dest="k",  default=False, action='store_true',
-                           help='Whether to ignore kerating and other contaminants. If NOT set contaminents will be removed.')
+                           help='Whether to ignore keratin and other contaminants. If NOT set contaminents will be removed.')
     
     arg_parse.add_argument('-c', '--columns', dest="c", metavar='COLUMN_SELECTION', nargs='+', default=None,
                            help='If not already specified within an experimental design file (-e), this option defines column/samples which should be grouped and compared. ' \
-                                'This option is designed for use within automated pipelines; for regular users the -e option should be easier. ' \
+                                'This option is designed for use within automated pipelines; for regular users using the -e option should be easier. ' \
                                 'Column/sample groups are specified in the form "1,2,3:4,5,6:7,8,9  3,4:5,6:10,11", with numbers ' \
                                 'starting at 1, identifying the data column. Columns within the same group are joined with commas "," and '\
-                                'two or more groups to be compared with one another are joined with colons ":". Several comparisons may be ' \
+                                'two or more groups to be compared with one another are joined with colons ":". Several sets of comparisons may be ' \
                                 'specified, separated by spaces. Columns numbers may appear in multiple groups/comparisons.') 
  
     arg_parse.add_argument('-l', '--log-status', dest="l", action='store_true',
-                           help=f"When set, writes status information to a log file; th elog file path will be based on the input path.")
+                           help=f"When set, writes status information to a log file; the log file path will be based on the input path.")
     
     arg_parse.add_argument('-q', '--quiet-mode', dest="q", action='store_true',
                            help='Proceed quietly, without user interaction; implicitly accept defaults to user queries')
     
-    arg_parse.add_argument('-f', '--min-log-fold', dest="f", metavar='MIN_RATIO', type=float, default=DEFALUT_FC,
-                           help=f'Minimum log2-fold change for potentially significant hits. Default: {DEFALUT_FC}')
+    arg_parse.add_argument('-f', '--min-fold-change', dest="f", metavar='MIN_RATIO', type=float, default=DEFALUT_FC,
+                           help=f'Minimum fold change for potentially significant hits. Default: {DEFALUT_FC}')
    
     arg_parse.add_argument('-p', '--max-p-value', dest="p", metavar='MAX_PVALUE', type=float, default=DEFALUT_MAXP,
                            help=f'Maximum threshold p-value (as a percentage) for selecting significant hits. Default: {DEFALUT_MAXP}')
@@ -800,9 +799,9 @@ def main(argv=None):
                            help=f'Optional color specification (used by matplotlib) for negative hits on volcano plots, e.g. "red" or "#FF0000". Default: {DEFAULT_NEG_COLOR}')
                            
     arg_parse.add_argument('--low-color', dest="low-color", metavar='COLOR', default=DEFAULT_LOW_COLOR,
-                           help=f'Optional color specification (used by matplotlib) insignificant points on volcano plots, e.g. "grey" or "#808080". Default: {DEFAULT_LOW_COLOR}')
+                           help=f'Optional color specification (used by matplotlib) for insignificant points on volcano plots, e.g. "grey" or "#808080". Default: {DEFAULT_LOW_COLOR}')
 
-    arg_parse.add_argument('-sx', '--split-x', dest="sx", metavar='XGAP_WIDTH', type=float, default=0.0,
+    arg_parse.add_argument('-xs', '--split-x', dest="xs", metavar='XGAP_WIDTH', type=float, default=0.0,
                            help='Optionally split the X-axis (fold change) on volcano plots if the largest gap between data points on ' \
                                 'the postive and/or negative side is larger than the value (in axis units) specified here; useful if ' \
                                 'you expect a wide range of fold-changes')
@@ -832,7 +831,7 @@ def main(argv=None):
     quiet = args['q']
     log = args['l']
     
-    split_x = args['sx']
+    split_x = args['xs']
     
     pos_color = args['pos-color']
     neg_color = args['neg-color']
@@ -886,6 +885,7 @@ def main(argv=None):
   
     # # # # # # # # # # # # # # # # # # # # # # #  # # # # # #    
     # Export table mark q95, check q95 rendering on volcano
+    # Chack colours passed through
     # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # 
 
 
