@@ -13,6 +13,17 @@ import lava_util as util
 
 DPI = 300
 
+def _watermark(fig, text=None):
+    
+    if not text:
+      text = f'Lava v{VERSION}'
+      
+    pad = 0.1/fig.get_figwidth()
+    
+    plt.text(1.0-pad, pad, text, transform=fig.transFigure, color='#000000', alpha=0.25, va='bottom', ha='right', fontsize=8.0)
+
+    
+
 def plot_sums_means_nans(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], edge_color='#404040'):
     
     totals = df[value_cols].sum(axis=0)
@@ -44,6 +55,7 @@ def plot_sums_means_nans(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080
 
     ax.set_xlabel('Data column/sample')    
     plt.subplots_adjust(hspace=0.35, bottom=0.1, top=0.95, right=0.95)
+    _watermark(fig)
     
     if pdf:
         pdf.savefig(dpi=DPI)
@@ -86,6 +98,7 @@ def boxplots(df, value_cols, pdf, scatter_colors=['#D00000','#A0A000','#0080FF']
     ax2.tick_params('x', top=True)
     
     plt.subplots_adjust(hspace=0.35, top=0.90, bottom=0.1, left=0.05, right=0.95)    
+    _watermark(fig)
     
     if pdf:
         pdf.savefig(dpi=DPI)
@@ -140,6 +153,7 @@ def histograms(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], nbin
     ax.set_ylim(0.0)
     
     plt.subplots_adjust(hspace=0.05, wspace=0.05, top=0.95, bottom=0.1, left=0.1, right=0.95) 
+    _watermark(fig)
     
     if pdf:
         pdf.savefig(dpi=DPI)
@@ -208,6 +222,7 @@ def xy_plots(df, value_cols, ncols, pdf, colors=['#0080FF','#A0A000','#D00000'],
                 ax.set_ylabel(f'{cols[i]}', fontsize=fontsize)
 
     plt.subplots_adjust(wspace=0.0, hspace=0.0, top=0.95, bottom=0.05, left=0.05, right=0.95)
+    _watermark(fig)
     
     if pdf:
         pdf.savefig(dpi=DPI)
@@ -274,6 +289,8 @@ def correlation_plot(df, value_cols, pdf, colors=['#0080FF','#A0A000','#D00000']
         ax.set_xticklabels([])
         ax.set_yticks([])
         ax.set_yticklabels([])
+
+    _watermark(fig)
     
     if pdf:
         pdf.savefig(dpi=DPI)
@@ -342,6 +359,7 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
          
     
     plt.subplots_adjust(wspace=0.15, hspace=0.1, top=0.95, bottom=0.05, left=0.1, right=0.95)
+    _watermark(fig)
 
     if pdf:
         pdf.savefig(dpi=DPI)
@@ -596,6 +614,8 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     if ax2:
         ax2.tick_params('y', length=0, color='w')
         ax2.set_facecolor('none')
+
+    _watermark(fig)
 
     if pdf:
         pdf.savefig(dpi=DPI)

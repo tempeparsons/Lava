@@ -13,7 +13,9 @@ from matplotlib.colors import LinearSegmentedColormap
 import lava_util as util
 import lava_plots as plots
 
-VERSION = '0.2.0'
+VERSION = '0.2.1'
+
+plots.VERSION = VERSION
 
 # Allow shirt codes for software
 SOFT_DN = ('DIANN', 'DN')
@@ -569,7 +571,9 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
                else:
                    ax.text(0.0, y_head, head, transform=ax.transAxes, color=hcolor, va='bottom', ha='left', fontsize=11.0)
         
-        ax.axhline(margin, linewidth=1, color='#808080', alpha=0.5)         
+        ax.axhline(margin, linewidth=1, color='#808080', alpha=0.5)
+        plots._watermark(fig, f'Lava v{VERSION} by H.T. Parsons')
+        
         ax.axis('off')
                 
         plt.subplots_adjust(top=1.0-margin, bottom=margin, left=margin, right=1.0-margin)  
