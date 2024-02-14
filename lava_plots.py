@@ -31,7 +31,7 @@ def plot_sums_means_nans(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080
     nancounts = df[value_cols].isna().sum()
     contents = [totals, means, nancounts]
     n_cols = len(value_cols)
-    
+        
     titles = ['Totals', 'Averages', 'Missing values']
     y_labels = ['Column total', 'Column mean', 'Column NaN count']
     
@@ -309,7 +309,7 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
     keys = sorted(plotdict.keys())
     n_rows = len(keys)
     
-    fig, axs = plt.subplots(n_rows, 2, figsize = (8, n_rows*1.2), sharex='col')
+    fig, axs = plt.subplots(n_rows, 2, figsize = (8, (1.0+n_rows)*1.2), sharex='col', squeeze=False)
     
     c0, c1 = colors
     x0_min = -1.0/nbins
@@ -358,7 +358,8 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
              ax1.set_xlabel('$log_2$ fold-change', fontsize=fontsize)
          
     
-    plt.subplots_adjust(wspace=0.15, hspace=0.1, top=0.95, bottom=0.05, left=0.1, right=0.95)
+    plt.subplots_adjust(wspace=0.15, hspace=0.1, top=0.8, bottom=0.2, left=0.1, right=0.95)
+    
     _watermark(fig)
 
     if pdf:
@@ -371,7 +372,8 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
 
 def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000','#D00000'],
             split_x=True, hq_only=False, hit_labels=True, markers=None,
-            lw=0.25, ls='--', lcolor='#808080', max_size=160.0, minsize=8.0):
+            lw=0.25, ls='--', lcolor='#808080', max_size=160.0, minsize=8.0,
+            label_size=5.0):
     
     colors=['#0080FF','#A0A000','#D00000']
     cmap = LinearSegmentedColormap.from_list('volc', colors)
@@ -388,6 +390,8 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
         plotlist = datacols[:3]
     else:
         plotlist = datacols[:6]
+   
+    pthresh = -np.log2(0.01 * pthresh)
     
     pvalues = np.array(df['Tpvals'])
     fcvalues = np.array(df['grp1grp2_FC'])
@@ -569,8 +573,8 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
                   if not a:
                     continue
                   
-                  txt = a.annotate(name, xy=(x, y), xytext=(ds, ds), fontsize=6, textcoords='offset points', clip_on=False)
-                  txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
+                  txt = a.annotate(name, xy=(x, y), xytext=(ds, ds), fontsize=label_size, textcoords='offset points', clip_on=False)
+                  txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
  
         if x <= -FClim and y >= pthresh:
             neg_overFC.append(name)
@@ -579,8 +583,8 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
                 for a in (ax0, ax1, ax2):
                   if not a:
                     continue
-                  txt = a.annotate(name, xy=(x, y), xytext=(ds, ds), fontsize=6, textcoords='offset points', clip_on=False)
-                  txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
+                  txt = a.annotate(name, xy=(x, y), xytext=(-ds, ds), fontsize=label_size, textcoords='offset points', ha='right', clip_on=False)
+                  txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
  
         if not hq_only:
             if plotlist[3][i] == q951 or plotlist[4][i] == q952:
@@ -588,15 +592,16 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
         
     for x, y, ds, name in marker_text:
          txt = ax.annotate(name, xy=(x, y), xytext=(ds, ds), textcoords='offset points',#arrowprops=dict(arrowstyle='-', fc="k", ec="k", lw=0.5, relpos=(0.25, 0.5)), bbox=dict(pad=-2, facecolor="none", edgecolor="none"),
-                          fontsize=6, clip_on=False)
-         txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
+                          fontsize=label_size, clip_on=False)
+         txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
     
     ax = ax0 if ax0 else ax1
     ax.text(0.05, 0.05, f'Greater in {group2}', color=color_neg, ha='left', va='top', transform=ax.transAxes, fontsize=10, clip_on=False)
     
     ax.set_ylim(0.0)
     pmax = math.ceil(np.nanmax(pvalues))
-    y_ticks = np.logspace(-9, 0, 10, base=10.0)
+    p = int(pmax) 
+    y_ticks = np.logspace(-p, 0, p+1, base=10.0)
     y_ticks = y_ticks[y_ticks > 2.0 ** (-pmax)]
     
     ax.yaxis.tick_left()
