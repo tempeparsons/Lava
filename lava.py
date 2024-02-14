@@ -95,7 +95,7 @@ def _read_data(file_path):
         df = pd.read_csv(file_path)
         
     else:    # Last resort try plain text
-        df = pd.read_table(file_path)
+        df = pd.read_table(file_path, na_values=[' '])
   
     df = df.replace(0, np.nan)
     
@@ -205,6 +205,7 @@ def _read_exp_file(df, file_path):
     n_cols = None
     
     group_dicts = []
+    col_rename = None
     
     with open(file_path, newline='') as file_obj:
         for row in csv.reader(file_obj, delimiter=delimiter):
@@ -232,7 +233,32 @@ def _read_exp_file(df, file_path):
                 group_dicts[i][group.strip()].append(col_name)
                 
             
-    if not group_dicts:
+    if group_dicts:
+        for i, group_dict in enumerate(group_dicts):
+             n_single = len([grp for grp in group_dict if len(group_dict[grp]) == 1])
+             if n_single == len(group_dict):
+                 info('Renaming columns according to exp. design file:')
+                 col_rename = {group_dict[grp][0]:grp for grp in group_dict}
+                 
+                 for orig in sorted(col_rename):
+                     info(f'  from "{orig}" to "{col_rename[orig]}"')
+                 
+                 renamed_group_dicts = []
+                 for j, group_dict in enumerate(group_dicts):
+                     if j == i:
+                         continue
+                     
+                     for grp in group_dict:
+                         group_dict[grp] = [col_rename[x] for x in group_dict[grp]]
+                    
+                     renamed_group_dicts.append(group_dict)
+                 
+                 group_dicts = renamed_group_dicts
+                 df.rename(columns=col_rename, inplace=True)
+                 break
+                 
+        
+    else:
         fail(f'Experimental design file {file_path} did not appear to contain anything useful')
     
     return group_dicts # a list of {group_nameA:[col_name1, col_name2], group_nameB:[col_name3, col_name4],}
@@ -282,11 +308,15 @@ def _split_col_groups(df, group_spec):
 
 def _check_cols(df, selection):
      
+     if isinstance(selection, str):
+         selection = [selection]
+      
      cols = list(df.columns)
      n_cols = len(cols)
-     
+         
      valid = []
      for col in selection:
+         
          if (col not in df) and col.isdigit():
              col = int(col)-1  # 1-based to 0-based
               
@@ -358,6 +388,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     df =  _read_data(in_path)
     cols = list(df.columns)
     n_cols = len(cols)
+    group_dicts = None
     
     if exp_path:  # Read from exp design file if possible
         group_dicts = _read_exp_file(df, exp_path)
@@ -430,8 +461,8 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
                
        
            groups.add(gname)
-           info(f'    Group "{gname}": {" ".join(cols)}')
-           option_report.append((f'Group "{gname}"', " ".join(cols)))
+           info(f'    Group "{gname}": {", ".join(cols)}')
+           option_report.append((f'Group "{gname}"', ", ".join(cols)))
            
            for col in cols:
               if col not in value_cols:
@@ -444,7 +475,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
        
     if ref_groups:
         ref_groups = set(ref_groups)
-        info(f'Reference sample groups:  {" ".join(ref_groups)}')
+        info(f'Ref. sample groups:  {" ".join(ref_groups)}')
         option_report.append(('Ref. sample groups', " ".join(ref_groups)))
 
 
@@ -453,8 +484,9 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
                fail('Reference sample group "{ref_group}" not found in experimental design. Available group names: {' '.join(sorted(groups))}')
     
     else:
+        ref_groups = set()
         info(f'No reference groups specified')
-        option_report.append(('Reference sample groups', 'None specified'))
+        option_report.append(('Ref. sample groups', 'None specified'))
     
     info(f'The comparisons will be made between the following pairs of sample groups:')
     option_report.append(('Group pairs compared', None))
@@ -745,8 +777,9 @@ def main(argv=None):
     arg_parse.add_argument('-e', '--experiment-table', dest="e", metavar='FILE_PATH', default=None, 
                            help='The location of a experimental design file. This file is a tab or comma-separated text file containing a table ' \
                                 'that relates the name of the data samples (input columns) to which experimental groups they belong. ' \
-                                'Each line should first give the name of the input column and then list the groups (or categories) ' \
-                                'to which it belongs. Groups will be compared according to their column position, i.e. comparisons are only ' \
+                                'Each line should first give the name of the input column, an optional (unique) short/new name for the column ' \
+                                'and then list the groups (or categories) to which it belongs. Optionally each line may contain a second column, '
+                                '\Groups will be compared according to their column position, i.e. comparisons are only ' \
                                 'made between the groups specified within one column of the experiment design table. ')
    
     arg_parse.add_argument('-s', '--software', dest="s", metavar='SOFTWARE', default=DEFAULT_SOFTWARE,
@@ -883,13 +916,13 @@ def main(argv=None):
     _check_color(low_color)
     
     colors = (pos_color, neg_color, low_color)
-    
+
     lava(in_path, exp_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns,
          remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only)
   
     # # # # # # # # # # # # # # # # # # # # # # #  # # # # # #    
     # Export table mark q95, check q95 rendering on volcano
-    # Chack colours passed through
+    # Check colours passed through
     # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # 
 
 
