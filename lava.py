@@ -676,8 +676,6 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
  
         p, n = util.prpn_log2FCs_over_threshold(df2, f_thresh)
         overFCthresh[k] = (p, n)
- 
- 
 
     Zdfs = []
     q95s = []

@@ -409,6 +409,9 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
          neg_split, pos_split = None, None
     
     y_label = 'p-value'
+    p_label = f'{2.0**-pthresh:.2g}'
+    p_label_kw = dict(xytext=(2,2), xycoords='data', textcoords='offset points', color='#808080', fontsize=5, ha='left', va='bottom')
+    
     figsize=(10,8)
     xmin, xmax = xlims
     hline_kw = dict(ls=ls, alpha=0.5, lw=lw, color=lcolor)
@@ -435,6 +438,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
         ax0.axhline(pthresh, **hline_kw)
         ax1.axhline(pthresh, **hline_kw)
         ax2.axhline(pthresh, **hline_kw)
+        ax0.annotate(p_label, (xmin, pthresh), **p_label_kw)
         
         ax0.plot([1,1], [1,0], transform=ax0.transAxes, **diag_kwargs)
         ax1.plot([0,0], [1,0], [1,1], [1,0], transform=ax1.transAxes, **diag_kwargs)
@@ -462,6 +466,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
         ax1.spines['left'].set_visible(False)
         ax0.axhline(pthresh, **hline_kw)
         ax1.axhline(pthresh, **hline_kw)
+        ax0.annotate(p_label, (xmin, pthresh), **p_label_kw)
 
         ax0.plot([1,1], [1,0], transform=ax0.transAxes, **diag_kwargs)
         ax1.plot([0,0], [1,0], transform=ax1.transAxes, **diag_kwargs)
@@ -485,6 +490,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
         #ax2.yaxis.set_label_position("right")
         ax1.axhline(pthresh, **hline_kw)
         ax2.axhline(pthresh, **hline_kw)
+        ax1.annotate(p_label, (xmin, pthresh), **p_label_kw)
 
         ax1.plot([1,1], [1,0], transform=ax1.transAxes, **diag_kwargs)
         ax2.plot([0,0], [0,1], transform=ax2.transAxes, **diag_kwargs)
@@ -502,6 +508,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
         ax1.axhline(pthresh, **hline_kw)
         ax1.axvline(FClim,   **hline_kw)
         ax1.axvline(-FClim,  **hline_kw)
+        ax1.annotate(p_label, (xmin, pthresh), **p_label_kw)
         
     fig.subplots_adjust(wspace=0.05)
     fig.set_clip_on(False)
@@ -516,10 +523,15 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     fcnorm /= fcnorm.max() # 0..1
     
     weights = pnorm * fcnorm # -1..1
+    weights /= np.abs(weights).max()
+    weights = (1.0 + weights) / 2.0 # 0..1
+    
     sizes = max_size * pnorm * pnorm * fcnorm * fcnorm # 0 .. max_size
     sizes = np.clip(sizes, minsize, max_size)
     
-    scatter_kw = dict(cmap=cmap, norm=Normalize(-1.0, 1.0), alpha=0.4, edgecolors='none', clip_on=False)
+    
+    scatter_kw = dict(alpha=0.4, edgecolors='none', clip_on=False)
+    hit_kw = dict(alpha=1.0, clip_on=False, edgecolor='k', linewidth=0.5, zorder=10)
    
     # middle bounds
     m0 = xmin
@@ -529,26 +541,30 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
         selection = fcvalues < neg_split[0]
         
         if np.any(selection):
-            ax0.scatter(fcvalues[selection], pvalues[selection], s=sizes[selection], c=weights[selection],**scatter_kw)
+            colors = [cmap(w) for w in weights[selection]]
+            ax0.scatter(fcvalues[selection], pvalues[selection], s=sizes[selection], c=colors,**scatter_kw)
         
         m0 = neg_split[1]
         
     if ax2:
         selection = fcvalues > pos_split[1]
         if np.any(selection):
-            ax2.scatter(fcvalues[selection], pvalues[selection], s=sizes[selection], c=weights[selection], **scatter_kw)
+            colors = [cmap(w) for w in weights[selection]]
+            ax2.scatter(fcvalues[selection], pvalues[selection], s=sizes[selection], c=colors, **scatter_kw)
         
         m1 = pos_split[0]
    
     selection = (fcvalues >= m0) & (fcvalues <= m1)
     
     if np.any(selection):
-        ax1.scatter(fcvalues[selection], pvalues[selection], s=sizes[selection], c=weights[selection], **scatter_kw)
+        colors = [cmap(w) for w in weights[selection]]
+        ax1.scatter(fcvalues[selection], pvalues[selection], s=sizes[selection], c=colors, **scatter_kw)
 
     marker_text = []
 
     for i, name in enumerate(plotlist[0]):
         size = sizes[i]
+        color =  color=cmap(weights[i])
         ds = 0.5 * np.sqrt(size)
         x = fcvalues[i]
         y = pvalues[i]
@@ -562,28 +578,28 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
         
         if name in markers:
             marker_text.append((x, y, ds, name))
-            ax.scatter(x, y, s=size, color='k', edgecolor='k', clip_on=False)
+            ax.scatter(x, y, s=size, color='k', edgecolor='k', clip_on=False, zorder=11)
             continue
         
         if x >= FClim and y >= pthresh:
             pos_overFC.append(name)
-            ax.scatter(x, y, s=size, color=cmap(weights[i]), edgecolor='k', linewidth=0.5, clip_on=False)
+            ax.scatter(x, y, s=size, color=color, **hit_kw)
             if hit_labels:
                 for a in (ax0, ax1, ax2):
                   if not a:
                     continue
                   
-                  txt = a.annotate(name, xy=(x, y), xytext=(ds, ds), fontsize=label_size, textcoords='offset points', clip_on=False)
+                  txt = a.annotate(name, xy=(x, y), xytext=(ds, ds), fontsize=label_size, textcoords='offset points', clip_on=False, zorder=11)
                   txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
  
         if x <= -FClim and y >= pthresh:
             neg_overFC.append(name)
-            ax.scatter(x, y, s=size, color=cmap(weights[i]), edgecolor='k', linewidth=0.5, clip_on=False)
+            ax.scatter(x, y, s=size, color=color,**hit_kw)
             if hit_labels:
                 for a in (ax0, ax1, ax2):
                   if not a:
                     continue
-                  txt = a.annotate(name, xy=(x, y), xytext=(-ds, ds), fontsize=label_size, textcoords='offset points', ha='right', clip_on=False)
+                  txt = a.annotate(name, xy=(x, y), xytext=(-ds, ds), fontsize=label_size, textcoords='offset points', ha='right', clip_on=False, zorder=11)
                   txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
  
         if not hq_only:
@@ -591,7 +607,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
                 ax.scatter(x, y, s=6, color=color_low)
         
     for x, y, ds, name in marker_text:
-         txt = ax.annotate(name, xy=(x, y), xytext=(ds, ds), textcoords='offset points',#arrowprops=dict(arrowstyle='-', fc="k", ec="k", lw=0.5, relpos=(0.25, 0.5)), bbox=dict(pad=-2, facecolor="none", edgecolor="none"),
+         txt = ax.annotate(name, xy=(x, y), xytext=(ds, ds), textcoords='offset points',
                           fontsize=label_size, clip_on=False)
          txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
     
