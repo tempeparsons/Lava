@@ -921,6 +921,8 @@ def main(argv=None):
     # # # # # # # # # # # # # # # # # # # # # # #  # # # # # #    
     # Export table mark q95, check q95 rendering on volcano
     # Check colours passed through
+    # Export table nz-counts
+    # Add seccondary index to table out; only firstuse in PDF
     # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # 
 
 
