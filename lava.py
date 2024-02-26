@@ -147,7 +147,9 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
    
    nmap = {'grp1grp2_FC':'log2_fold_change', 'Tpvals':'-log2_pvalue',
            'pvals':'p-value', 'Tpvals_q95':'-log2_Q95_pvalue',
-           'zstd_grp1_q95':'Q95_sigma_A','zstd_grp2_q95':'Q95_sigma_B',}
+           'zstd_grp1_q95':'Q95_sigma_A','zstd_grp2_q95':'Q95_sigma_B',
+           'nobs_grp1':'nobs_A', 'nobs_grp2':'nobs_B', 
+           }
    
    quad_map = {(True,True):'HIT_pos', (True,False):'HIT_neg', (False,True):'fail_pos', (False,False):'fail_neg', }
    
@@ -621,7 +623,8 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     #print('previous numeric columns:', value_cols, '\n')
     #value_cols = [col for col in value_cols if col not in columns_to_drop]
     #print('updated numeric columns:', value_cols)
-
+    
+    orig_df = df.copy()
     df = np.log2(df[value_cols])
     
     # box plots
@@ -652,25 +655,45 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         
         key = f'{g1}:::{g2}'
         FCdict[key] = [df2, cols1, cols2]
-        Zdict[key]  = [df2, cols1, cols2]
+        Zdict[key]  = [df2.copy(), cols1, cols2]
  
  
     overFCthresh = {}
     dfnames = []
     FCdfs = []
     for k, (df2, cols1, cols2) in FCdict.items():
+
         grp1 = [c for c in df2.columns if c in cols1]
         grp2 = [c for c in df2.columns if c in cols2]
- 
+        
+        # Add original data to output
+        for col1 in grp1:
+            df2['in_' + col1] = orig_df[col1]
+
+        for col2 in grp2:
+            df2['in_' + col2] = orig_df[col2]
+        
         df2['nobs_grp1'] = df2.loc[:,grp1].count(axis=1)
         df2['nobs_grp2'] = df2.loc[:,grp2].count(axis=1)
         df2 = util.remove_rows(df2, len(grp1), len(grp2))
-        df2 = df2.drop(columns = ['nobs_grp1', 'nobs_grp2'])
+        #df2 = df2.drop(columns = ['nobs_grp1', 'nobs_grp2']) # now added to output
 
         df2['mean_grp1'] = df2.loc[:,grp1].mean(axis=1)
         df2['mean_grp2'] = df2.loc[:,grp2].mean(axis=1)
+        
+        
+        ## Things to think about
+        mu1 = np.array(df2['mean_grp1'])
+        mu2 = np.array(df2['mean_grp2'])
+        mus = np.concatenate([mu1, mu2])
+        mus = mus[mus>0]
+        minmu = np.min(mus)
+        df2['mean_grp1'] = np.where(df2['mean_grp1'] == 0, minmu, df2['mean_grp1'])
+        df2['mean_grp2'] = np.where(df2['mean_grp2'] == 0, minmu, df2['mean_grp2'])
+         
+        
         df2['grp1grp2_FC'] = df2['mean_grp1'] - df2['mean_grp2']
- 
+       
         FCdfs.append(df2)
         dfnames.append(k)
  
@@ -690,22 +713,29 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         df = df.drop(columns = ['nobs_grp1', 'nobs_grp2'])
  
         df['zmean_grp1'] = df.loc[:,grp1].mean(axis=1)
-        df['zstd_grp1'] = df.loc[:,grp1].std(axis=1)
+        df['zstd_grp1'] = df.loc[:,grp1].std(axis=1, ddof=1)
         
         q95grp1 = df.zstd_grp1.quantile(q=0.95)
         df['zstd_grp1_q95'] = df['zstd_grp1'].fillna(q95grp1)
         df['znobs_grp1'] = df.loc[:,grp1].count(axis=1)
         df['znobs_grp1_q95'] = np.where(df['znobs_grp1'] == 1, 2, df['znobs_grp1'])
         df['zmean_grp2'] = df.loc[:,grp2].mean(axis=1)
-        df['zstd_grp2'] = df.loc[:,grp2].std(axis=1)
+        df['zstd_grp2'] = df.loc[:,grp2].std(axis=1, ddof=1)
         
         q95grp2 = df.zstd_grp2.quantile(q=0.95)
         df['zstd_grp2_q95'] = df['zstd_grp2'].fillna(q95grp2)
         df['znobs_grp2'] = df.loc[:,grp2].count(axis=1)
         df['znobs_grp2_q95'] = np.where(df['znobs_grp2'] == 1, 2, df['znobs_grp2'])
- 
+        
+        ## Things to think about
+        df['zstd_grp1'] = np.where(df['zstd_grp1'] == 0, df['zstd_grp2'], df['zstd_grp1'])
+        df['zstd_grp2'] = np.where(df['zstd_grp2'] == 0, df['zstd_grp1'], df['zstd_grp2'])
+        
+        
         df = util.ttest_from_stats_eqvar(df)
  
+        df = df.drop(columns = grp1 + grp2)
+        
         q95 = (q95grp1, q95grp2)
         q95s.append(q95)
  
@@ -714,7 +744,14 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     FZdfs = []
     for i, df in enumerate(FCdfs):
         FZdf = pd.concat([df, Zdfs[i]], axis=1)
-        FZdfs.append(FZdf[['grp1grp2_FC', 'pvals', 'Tpvals', 'Tpvals_q95', 'zstd_grp1_q95', 'zstd_grp2_q95']])
+        
+        # Reorder
+        col_selection = ['grp1grp2_FC', 'pvals', 'nobs_grp1', 'nobs_grp2', 'Tpvals', 'Tpvals_q95', 'zstd_grp1_q95', 'zstd_grp2_q95', 'zmean_grp2', 'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
+        
+        # Orig data last
+        col_selection += [c for c in df.columns if c.startswith('in_')]
+        
+        FZdfs.append(FZdf[col_selection])
  
     plotdict = dict(zip(dfnames, FZdfs))
     q95dict = dict(zip(dfnames, q95s))
@@ -722,8 +759,8 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     ##review that you're about the plot the expected pairs
     ##review what percentage of proteins will be higher-lower than the positive-negative fold change limits
 
-    #for k, v in plotdict.items():
-    #    info(f'you are plotting these pairs: {k}')
+    
+    
     
     info(f'Using log2 fold-change threshold: {f_thresh}')
     for k, (pos, neg) in overFCthresh.items():
@@ -740,9 +777,33 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
 
     for a, b in pairs:
         pair_name = f'{a}:::{b}'
+        
+        """
+        df =  plotdict[pair_name]
+        
+        fig, (ax1, ax2) = plt.subplots(2, 1)
+        
+        mu1 = np.array(df['zmean_grp1'])
+        mu2 = np.array(df['zmean_grp2'])
+        sig1 = np.array(df['zstd_grp1'])
+        sig2 = np.array(df['zstd_grp2'])
+        
+         
+        ax1.scatter(mu1, mu2, color='#0080FF', alpha=0.5, s=3)
+        ax1.set_xlabel('Mean 1')
+        ax1.set_ylabel('Mean 2')
+         
+        x_vals = np.maximum(mu1, mu2)
+        y_vals = np.minimum(sig1, sig2)
+        ax2.scatter(x_vals, y_vals, color='#FF0000', alpha=0.5, s=3)
+        ax2.set_xlabel('Mean')
+        ax2.set_ylabel('STD')
+        
+        plt.show()
+        """
         plots.volcano(pdf, pair_name, plotdict[pair_name], q95dict[pair_name], f_thresh, p_thresh, colors,
                       split_x, hq_only, hit_labels, markers, lw=0.25, ls='--')
-    
+        
     if table_path:
         save_volcano_table(pairs, plotdict, table_path, f_thresh, p_thresh)
     
@@ -844,7 +905,7 @@ def main(argv=None):
     arg_parse.add_argument('--no-labels', dest="no-labels", action='store_true',
                            help='If set, suppress the labelling of significant hits in the volcano plots')
     
-    arg_parse.add_argument('--hq-only', dest="hq-only", action='store_true',
+    arg_parse.add_argument('-hq', '--hq-only', dest="hq-only", action='store_true',
                            help='If set, plot only the high-quality points on volcano plots. Otherwise low quality points ' \
                                  '(thous with s single data point in one group) will be plotted, albeit differently. Data points with only ' \
                                  'one value in both compared groups are never plotted.')
@@ -923,6 +984,8 @@ def main(argv=None):
     # Check colours passed through
     # Export table nz-counts
     # Add seccondary index to table out; only firstuse in PDF
+    # (-log) P-values are maybe a bit inflated for all-zero comparisons
+    
     # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # 
 
 
@@ -933,6 +996,10 @@ if __name__ == '__main__':
 """
 Example: 
 python3 lava.py VolcCLI_PD1.xlsx -o VolcCLI_PD1_out.xlsx -g VolcCLI_PD1.pdf -e groups_example.txt -l -r A -m P00918
+
+python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava.pdf -o test/Nadine_LVA/Nadine_LVA_lava.xlsx -r CNT -f 10 -p 0.5 -i "Gene Symbol"
+ 
+python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava03.pdf -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava.xlsx -r WT -f 10 -p 0.5 -i "Gene Symbol"
 
 """
     
