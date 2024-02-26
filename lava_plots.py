@@ -383,18 +383,29 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     
     if not markers:
         markers = []
-      
-    datacols = [df.index, df['grp1grp2_FC'], df['Tpvals'], df['Tpvals_q95'], df['zstd_grp1_q95'], df['zstd_grp2_q95']]
-
-    if hq_only:
-        plotlist = datacols[:3]
-    else:
-        plotlist = datacols[:6]
    
     pthresh = -np.log2(0.01 * pthresh)
     
+    high_qual = (np.array(df['zstd_grp1_q95']) != q951) & (np.array(df['zstd_grp2_q95']) != q952)
+    
+    has_zeros = (np.array(df['zstd_grp1_q95']) == 0.0) | (np.array(df['zstd_grp2_q95']) == 0.0)
+    
+    names = np.array(df.index)
+    
     pvalues = np.array(df['Tpvals'])
+    pvalues_q95 = np.array(df['Tpvals_q95'])
+    
+    nan_mask = np.isnan(pvalues)
+    pvalues[nan_mask] = pvalues_q95[nan_mask]
+    
     fcvalues = np.array(df['grp1grp2_FC'])
+    
+    if hq_only:
+        pvalues = pvalues[high_qual]
+        fcvalues = fcvalues[high_qual]
+        names = names[high_qual]
+        high_qual = high_qual[high_qual]
+        has_zeros = high_qual[high_qual]
      
     pos_overFC = []
     neg_overFC = []
@@ -516,10 +527,10 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     ax1.set_title(pair_name.replace(':::',' vs '), fontsize=18)
     ax1.set_xlabel('log2 fold change')
     
-    pnorm = np.array(plotlist[1])
+    pnorm = np.array(pvalues)
     pnorm /= pnorm.max() # 0..1
     
-    fcnorm = np.abs(plotlist[2])
+    fcnorm = np.abs(fcvalues)
     fcnorm /= fcnorm.max() # 0..1
     
     weights = pnorm * fcnorm # -1..1
@@ -553,8 +564,8 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
             ax2.scatter(fcvalues[selection], pvalues[selection], s=sizes[selection], c=colors, **scatter_kw)
         
         m1 = pos_split[0]
-   
-    selection = (fcvalues >= m0) & (fcvalues <= m1)
+    
+    selection = (fcvalues >= m0) & (fcvalues <= m1) & high_qual
     
     if np.any(selection):
         colors = [cmap(w) for w in weights[selection]]
@@ -562,12 +573,16 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
 
     marker_text = []
 
-    for i, name in enumerate(plotlist[0]):
+    for i, name in enumerate(names):
         size = sizes[i]
+        low_qual = not high_qual[i]
         color =  color=cmap(weights[i])
         ds = 0.5 * np.sqrt(size)
         x = fcvalues[i]
         y = pvalues[i]
+        
+        if hq_only and low_qual:
+            continue
         
         if ax0 and (x <= neg_split[0]):
             ax = ax0
@@ -575,36 +590,52 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
             ax = ax2
         else:
             ax = ax1  
-        
+ 
         if name in markers:
             marker_text.append((x, y, ds, name))
             ax.scatter(x, y, s=size, color='k', edgecolor='k', clip_on=False, zorder=11)
             continue
         
+        if has_zeros[i]:
+          name = name + '*'
+        
         if x >= FClim and y >= pthresh:
-            pos_overFC.append(name)
-            ax.scatter(x, y, s=size, color=color, **hit_kw)
+            if low_qual:
+                 ax.scatter(x, y, s=size, marker='h', color=color, **hit_kw)
+            
+            else:
+                 pos_overFC.append(name)
+                 ax.scatter(x, y, s=size, color=color, **hit_kw)
+            
             if hit_labels:
                 for a in (ax0, ax1, ax2):
                   if not a:
                     continue
-                  
+ 
                   txt = a.annotate(name, xy=(x, y), xytext=(ds, ds), fontsize=label_size, textcoords='offset points', clip_on=False, zorder=11)
                   txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
- 
+             
+            continue
+             
         if x <= -FClim and y >= pthresh:
-            neg_overFC.append(name)
-            ax.scatter(x, y, s=size, color=color,**hit_kw)
+            if low_qual:
+                 ax.scatter(x, y, s=size, marker='h', color=color, **hit_kw)
+            else:     
+                 neg_overFC.append(name)
+                 ax.scatter(x, y, s=size, color=color, **hit_kw)
+                 
             if hit_labels:
                 for a in (ax0, ax1, ax2):
                   if not a:
                     continue
                   txt = a.annotate(name, xy=(x, y), xytext=(-ds, ds), fontsize=label_size, textcoords='offset points', ha='right', clip_on=False, zorder=11)
                   txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
+            
+            continue
  
-        if not hq_only:
-            if plotlist[3][i] == q951 or plotlist[4][i] == q952:
-                ax.scatter(x, y, s=6, color=color_low)
+        if low_qual:
+            ax.scatter(x, y, s=size, marker='v', color=color, zorder=12) # color=color_low
+            continue
         
     for x, y, ds, name in marker_text:
          txt = ax.annotate(name, xy=(x, y), xytext=(ds, ds), textcoords='offset points',
