@@ -65,12 +65,25 @@ def prpn_log2FCs_over_threshold(df, thresh_int):
 
 
 def make_znorm(df):
+    
     valuecols = df.columns.to_list()
+    meds = []
+    stds = []
     for col in valuecols:
-        df[col] = (df[col] - df[col].mean())/df[col].std(ddof=0)
-    df += 10
+        vals = np.array(df[col])
+        nz_vals = vals[vals > 0] # No zeros or nans
+        meds.append(np.median(nz_vals))
+        std = nz_vals.std(ddof=0)
+        stds.append(std)
+        df[col] = (vals - nz_vals.mean())/std
+    
+    med_med = np.median(meds)
+    med_std = np.median(stds)
+    
+    df *= med_std
+    df += med_med
+    
     return df
-
 
 
 def ttest_from_stats_eqvar(df):
@@ -91,7 +104,7 @@ def ttest_from_stats_eqvar(df):
     
 def get_bins(pair_df):
 
-    FCs = pair_df['grp1grp2_zFC'].to_list() #changed from 'grp1grp2_FC' to 'grp1grp2_zFC'
+    FCs = pair_df['grp1grp2_FC'].to_list()
     fcmin = np.nanmin(FCs)
     fcmax = np.nanmax(FCs)
     counts, edges = np.histogram(FCs, bins=50, range=(fcmin, fcmax))
@@ -121,7 +134,7 @@ def get_xlist(pair_df):
 
 def get_splitxlist(pair_df, min_gap=1.0, x_pad=0.1):
     
-    FCs = pair_df['grp1grp2_zFC'] #changed from 'grp1grp2_FC' to 'grp1grp2_zFC'
+    FCs = pair_df['grp1grp2_FC']
     pvals = pair_df['Tpvals']
     
     valid =  pvals > 0.0
