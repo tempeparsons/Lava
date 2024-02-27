@@ -322,7 +322,7 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
          ax1 = axs[row, 1]
          
          pvals = df['pvals'].to_list()
-         FCs = df['grp1grp2_zFC'].to_list() #changed from 'grp1grp2_FC' to 'grp1grp2_zFC'
+         FCs = df['grp1grp2_FC'].to_list()
          
          if row == 0:
              ax0.set_title(f'P-value distrbutions', color=c0)    
@@ -375,8 +375,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
             lw=0.25, ls='--', lcolor='#808080', max_size=160.0, minsize=8.0,
             label_size=5.0):
     
-    colors=['#0080FF','#A0A000','#D00000']
-    cmap = LinearSegmentedColormap.from_list('volc', colors)
+    cmap = LinearSegmentedColormap.from_list('volc', colors[::-1])
     
     group1, group2 = pair_name.split(':::')
     q951, q952 = q95
@@ -398,7 +397,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     nan_mask = np.isnan(pvalues)
     pvalues[nan_mask] = pvalues_q95[nan_mask]
     
-    fcvalues = np.array(df['grp1grp2_zFC']) #changed from 'grp1grp2_FC' to 'grp1grp2_zFC'
+    fcvalues = np.array(df['grp1grp2_FC'])
     
     if hq_only:
         pvalues = pvalues[high_qual]
@@ -410,7 +409,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     pos_overFC = []
     neg_overFC = []
     
-    color_neg, color_low, color_pos = colors
+    color_pos, color_low, color_neg = colors
     
     if split_x:
          xlims, neg_split, pos_split = util.get_splitxlist(df, abs(split_x))
@@ -530,8 +529,8 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     pnorm = np.array(pvalues)
     pnorm /= pnorm.max() # 0..1
     
-    fcnorm = np.abs(fcvalues)
-    fcnorm /= fcnorm.max() # 0..1
+    fcnorm = np.array(fcvalues)
+    fcnorm /= np.abs(fcnorm).max() # 0..1
     
     weights = pnorm * fcnorm # -1..1
     weights /= np.abs(weights).max()
@@ -601,7 +600,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
         
         if x >= FClim and y >= pthresh:
             if low_qual:
-                 ax.scatter(x, y, s=size, marker='h', color=color, **hit_kw)
+                 ax.scatter(x, y, s=size * 0.5, marker='h', color=color, **hit_kw)
             
             else:
                  pos_overFC.append(name)
@@ -619,7 +618,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
              
         if x <= -FClim and y >= pthresh:
             if low_qual:
-                 ax.scatter(x, y, s=size, marker='h', color=color, **hit_kw)
+                 ax.scatter(x, y, s=size * 0.5, marker='h', color=color, **hit_kw)
             else:     
                  neg_overFC.append(name)
                  ax.scatter(x, y, s=size, color=color, **hit_kw)
@@ -634,7 +633,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
             continue
  
         if low_qual:
-            ax.scatter(x, y, s=size, marker='v', color=color, zorder=12) # color=color_low
+            ax.scatter(x, y, s=size * 0.5, marker='v', color=color, zorder=12) # color=color_low
             continue
         
     for x, y, ds, name in marker_text:
