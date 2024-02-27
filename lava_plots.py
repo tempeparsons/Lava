@@ -322,7 +322,7 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
          ax1 = axs[row, 1]
          
          pvals = df['pvals'].to_list()
-         FCs = df['grp1grp2_FC'].to_list()
+         FCs = df['grp1grp2_zFC'].to_list() #changed from 'grp1grp2_FC' to 'grp1grp2_zFC'
          
          if row == 0:
              ax0.set_title(f'P-value distrbutions', color=c0)    
@@ -398,7 +398,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     nan_mask = np.isnan(pvalues)
     pvalues[nan_mask] = pvalues_q95[nan_mask]
     
-    fcvalues = np.array(df['grp1grp2_FC'])
+    fcvalues = np.array(df['grp1grp2_zFC']) #changed from 'grp1grp2_FC' to 'grp1grp2_zFC'
     
     if hq_only:
         pvalues = pvalues[high_qual]

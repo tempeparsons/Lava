@@ -145,7 +145,7 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
    # Rename more col headings, mark q95
    # Colour excel table
    
-   nmap = {'grp1grp2_FC':'log2_fold_change', 'Tpvals':'-log2_pvalue',
+   nmap = {'grp1grp2_zFC':'log2_fold_change', 'Tpvals':'-log2_pvalue',#changed from 'grp1grp2_FC' to 'grp1grp2_zFC'
            'pvals':'p-value', 'Tpvals_q95':'-log2_Q95_pvalue',
            'zstd_grp1_q95':'Q95_sigma_A','zstd_grp2_q95':'Q95_sigma_B',
            'nobs_grp1':'nobs_A', 'nobs_grp2':'nobs_B', 
@@ -159,7 +159,7 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
    keys = [f'{a}:::{b}' for a,b in pairs]
    for key in keys:
        df = plotdict[key]
-       lfc = np.array(df['grp1grp2_FC'])
+       lfc = np.array(df['grp1grp2_zFC']) #changed from 'grp1grp2_FC' to 'grp1grp2_zFC'
        pvs = np.array(df['Tpvals'])
        n = len(lfc)
        
@@ -726,6 +726,8 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         df['zstd_grp2_q95'] = df['zstd_grp2'].fillna(q95grp2)
         df['znobs_grp2'] = df.loc[:,grp2].count(axis=1)
         df['znobs_grp2_q95'] = np.where(df['znobs_grp2'] == 1, 2, df['znobs_grp2'])
+
+        df['grp1grp2_zFC'] = df['zmean_grp1'] - df['zmean_grp2'] #changed from 'grp1grp2_FC' to 'grp1grp2_zFC'
         
         ## Things to think about
         df['zstd_grp1'] = np.where(df['zstd_grp1'] == 0, df['zstd_grp2'], df['zstd_grp1'])
@@ -746,7 +748,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         FZdf = pd.concat([df, Zdfs[i]], axis=1)
         
         # Reorder
-        col_selection = ['grp1grp2_FC', 'pvals', 'nobs_grp1', 'nobs_grp2', 'Tpvals', 'Tpvals_q95', 'zstd_grp1_q95', 'zstd_grp2_q95', 'zmean_grp2', 'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
+        col_selection = ['grp1grp2_zFC', 'pvals', 'nobs_grp1', 'nobs_grp2', 'Tpvals', 'Tpvals_q95', 'zstd_grp1_q95', 'zstd_grp2_q95', 'zmean_grp2', 'zmean_grp1', 'zstd_grp1', 'zstd_grp2'] #changed from 'grp1grp2_FC' to 'grp1grp2_zFC'
         
         # Orig data last
         col_selection += [c for c in df.columns if c.startswith('in_')]

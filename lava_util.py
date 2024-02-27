@@ -91,7 +91,7 @@ def ttest_from_stats_eqvar(df):
     
 def get_bins(pair_df):
 
-    FCs = pair_df['grp1grp2_FC'].to_list()
+    FCs = pair_df['grp1grp2_zFC'].to_list() #changed from 'grp1grp2_FC' to 'grp1grp2_zFC'
     fcmin = np.nanmin(FCs)
     fcmax = np.nanmax(FCs)
     counts, edges = np.histogram(FCs, bins=50, range=(fcmin, fcmax))
@@ -121,7 +121,7 @@ def get_xlist(pair_df):
 
 def get_splitxlist(pair_df, min_gap=1.0, x_pad=0.1):
     
-    FCs = pair_df['grp1grp2_FC']
+    FCs = pair_df['grp1grp2_zFC'] #changed from 'grp1grp2_FC' to 'grp1grp2_zFC'
     pvals = pair_df['Tpvals']
     
     valid =  pvals > 0.0
