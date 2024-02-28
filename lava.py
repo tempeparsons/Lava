@@ -166,8 +166,8 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
        quad_cats = [quad_map[((pvs[i] >= p_thresh and (abs(lfc[i]) >= f_thresh)), lfc[i] >= 0)] for i in range(n)]
        
        fc = 2.0 ** (-lfc)
-       df.insert(0, 'fold_change', fc)
-       df.insert(0, 'hit_class', quad_cats)
+       df.insert(1, 'fold_change', fc)
+       df.insert(1, 'hit_class', quad_cats)
        df.sort_values(by=['pvals',], ascending=True, inplace=True)
        df.rename(columns=nmap, inplace=True)
    
@@ -385,7 +385,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
                      ('Split volcano X-axis',split_x),
                      ('Show hit labels',hit_labels),
                      ('Show high quality',hq_only),
-                     ('Z-normalize fold-changes',znorm_fc),
+                     ('Z-norm fold-changes',znorm_fc),
                      ]
         
     color_pos, color_neg, color_low =   colors
@@ -402,14 +402,22 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     
     if idx_cols:
         idx_cols = _check_cols(df, idx_cols)
+        
         if not idx_cols:
             fail('No valid index columns found')
-    
+        
+        for col in DEFAULT_INDEX_COLS:
+            if (col in df) and (col not in idx_cols):
+                extra_id_col = col
+                break
+                
     else:
         idx_cols = [x for x in DEFAULT_INDEX_COLS if x in df]
       
         if not idx_cols:
             fail('No valid index columns found after falling back to default; {' '.join(DEFAULT_INDEX_COLS)}')
+        
+        extra_id_col = None
             
     if not idx_cols:
         fail('No index column specified')
@@ -542,10 +550,10 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     if pdf:
         font_height = 0.16 # = 11 pt
         wrap_len = 90
-        
         n_lines = 0
         y = font_height
         y_offsets = []
+        
         for i, (head, value) in enumerate(option_report):
           y_head = y + font_height
           
@@ -676,6 +684,9 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         for col2 in grp2:
             df2['in_' + col2] = orig_df[col2]
         
+        if extra_id_col:
+            df2['protein_id'] = orig_df[extra_id_col]
+        
         df2['nobs_grp1'] = df2.loc[:,grp1].count(axis=1)
         df2['nobs_grp2'] = df2.loc[:,grp2].count(axis=1)
         df2 = util.remove_rows(df2, len(grp1), len(grp2))
@@ -683,7 +694,6 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
 
         df2['mean_grp1'] = df2.loc[:,grp1].mean(axis=1)
         df2['mean_grp2'] = df2.loc[:,grp2].mean(axis=1)
-        
         
         # Clip zeros
         mu1 = np.array(df2['mean_grp1'])
@@ -756,9 +766,11 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
             df = df.drop(columns = ['grp1grp2_FC']) # Avoid diplicate
 
         FZdf = pd.concat([df, Zdfs[i]], axis=1)
-         
+        
+        col_selection = ['protein_id'] if extra_id_col else []
+            
         # Reorder
-        col_selection = ['grp1grp2_FC', 'pvals', 'nobs_grp1', 'nobs_grp2', 'Tpvals', 'Tpvals_q95', 'zstd_grp1_q95', 'zstd_grp2_q95', 'zmean_grp2', 'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
+        col_selection += ['grp1grp2_FC', 'pvals', 'nobs_grp1', 'nobs_grp2', 'Tpvals', 'Tpvals_q95', 'zstd_grp1_q95', 'zstd_grp2_q95', 'zmean_grp2', 'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
         
         # Orig data last
         col_selection += [c for c in df.columns if c.startswith('in_')]
@@ -849,12 +861,12 @@ def main(argv=None):
                            help='The input file path to read data from; the DIA results text file (protein-level, not peptide-level)')
     
     arg_parse.add_argument('-e', '--experiment-table', dest="e", metavar='FILE_PATH', default=None, 
-                           help='The location of a experimental design file. This file is a tab or comma-separated text file containing a table ' \
-                                'that relates the name of the data samples (input columns) to which experimental groups they belong. ' \
-                                'Each line should first give the name of the input column, an optional (unique) short/new name for the column ' \
-                                'and then list the groups (or categories) to which it belongs. Optionally each line may contain a second column, '
-                                '\Groups will be compared according to their column position, i.e. comparisons are only ' \
-                                'made between the groups specified within one column of the experiment design table. ')
+                           help='The experimental design file; this is a comma- or tab-separated text file containing a table, ' \
+                                'relating the names of data samples to their experimental groups/categories; labels like "Control", "CondA" etc. ' \
+                                'In the experimental design table the sample names (matching the input data file) should be in the first column. ' \
+                                'Optionally, a column of short/new names for the samples may be specified; these must be unique for each row.' \
+                                'Subsequently, the groups (or categories) to which each samples belong are specified in further columns. ' \
+                                'Each grouping column defines a distinct set of comparisons, i.e. samples can be compared according to different variables.')
    
     arg_parse.add_argument('-s', '--software', dest="s", metavar='SOFTWARE', default=DEFAULT_SOFTWARE,
                            help=f"The name of the software used to process the data present in the input file. Available choices: {', '.join(VALID_SOFTWARE)}. Deafult: {DEFAULT_SOFTWARE}")
@@ -998,9 +1010,9 @@ def main(argv=None):
     lava(in_path, exp_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns,
          remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc)
   
-    # # # # # # # # # # # # # # # # # # # # # # #  # # # # # #
-    # Add seccondary index to table out; only first use in PDF
-    # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # 
+    # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # #
+    # Add seccondary index to table out; only first use in PDF #
+    # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # #
 
 
 if __name__ == '__main__':
@@ -1011,11 +1023,14 @@ if __name__ == '__main__':
 Example: 
 python3 lava.py VolcCLI_PD1.xlsx -o VolcCLI_PD1_out.xlsx -g VolcCLI_PD1.pdf -e groups_example.txt -l -r A -m P00918
 
-python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava02.pdf -o test/Nadine_LVA/Nadine_LVA_lava.xlsx -r CNT -f 10 -p 0.5 -i "Gene Symbol"
-python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava02z.pdf -z -o test/Nadine_LVA/Nadine_LVA_lava.xlsx -r CNT -f 10 -p 0.5 -i "Gene Symbol"
- 
+python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava01.pdf -o test/Nadine_LVA/Nadine_LVA_lava.xlsx -r CNT -f 10 -p 0.5 -i "Gene Symbol"
 python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava03.pdf -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava.xlsx -r WT -f 10 -p 0.5 -i "Gene Symbol"
-python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava03z.pdf -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava.xlsx -r WT -f 10 -p 0.5 -i "Gene Symbol"
+
+python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava02_znorm.pdf -z -o test/Nadine_LVA/Nadine_LVA_lava_znorm.xlsx -r CNT -f 10 -p 0.5 -i "Gene Symbol"
+python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava04_znorm.pdf -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava_znorm.xlsx -r WT -f 10 -p 0.5 -i "Gene Symbol"
+
+python3 lava.py test/111120_IC/111120_EV_Fraction_IC.xlsx -e test/111120_IC/exptdesign.txt -g test/111120_IC/111120_IC_plotsZ01.pdf -o test/111120_IC/111120_IC_plotdataZ01.xlsx -f 6.0 -z
+
 
 """
     
