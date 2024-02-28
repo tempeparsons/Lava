@@ -88,7 +88,7 @@ def boxplots(df, value_cols, pdf, scatter_colors=['#D00000','#A0A000','#0080FF']
         x_vals = i + (np.cumsum(dx) % scatter_width) - scatter_width/2
  
         color = scatter_colors[i % ns]
-        ax2.scatter(x_vals, y_vals, color=color, alpha=0.4, s=5)
+        ax2.scatter(x_vals, y_vals, color=color, alpha=0.3, s=4)
  
     x_ticks = np.arange(0, nc)   
     ax2.set_xlim(-0.5, nc-0.5)  
@@ -116,7 +116,7 @@ def histograms(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], nbin
     nx = int(math.ceil(math.sqrt(n_cols)))
     ny = int(math.ceil(n_cols/nx))
     
-    fig, axarr = plt.subplots(ny, nx, squeeze=False, figsize=(9,9), sharex=True, sharey=True)
+    fig, axarr = plt.subplots(ny, nx, squeeze=False, figsize=(9, 7), sharex=True, sharey=True)
      
     for i in range(nx*ny):
         ax = axarr.flat[i]
@@ -147,6 +147,8 @@ def histograms(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], nbin
             if (i % nx) == 0:
                 ax.set_ylabel('Bin count')
             
+            ax.grid(visible=True, which='major', axis='x', color='#808080', linewidth=0.5, linestyle='--', alpha=0.5, zorder=-1)
+            
         else:
             ax.set_visible(False)
 
@@ -163,11 +165,9 @@ def histograms(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], nbin
     plt.close()
         
     
-def xy_plots(df, value_cols, ncols, pdf, colors=['#0080FF','#A0A000','#D00000'], figsize=10.0, bg_color='#B0B0B0'):
+def xy_plots(df, value_cols, ncols, pdf, colors=['#0080FF','#A0A000','#FF0000'], figsize=10.0, bg_color='#B0B0B0'):
     
-    cmap2 = LinearSegmentedColormap.from_list('gud', [bg_color, colors[0]])
-    cmap1 = LinearSegmentedColormap.from_list('med', [bg_color, colors[1]])
-    cmap0 = LinearSegmentedColormap.from_list('bad', [bg_color, colors[2]])
+    main_cmap = LinearSegmentedColormap.from_list('main', colors) # bad to good
     
     cols = list(df[value_cols])
     n = len(cols)    
@@ -177,28 +177,37 @@ def xy_plots(df, value_cols, ncols, pdf, colors=['#0080FF','#A0A000','#D00000'],
     gridsize = int(400//n)
     
     fontsize = min(1e3/(figsize * n), 14)
+
+
+    data = np.array([df[col] for col in cols])
+    data[~(data > 0)] =  np.nanmean(data) # Zeros and nans
+    corr_mat = distance.pdist(data, metric='correlation') # Correlation 'distance" : 1.0 - rho
+    corr_mat = 1.0 - distance.squareform(distance.pdist(data, metric='correlation'))
+    min_corr = corr_mat.min()
+    max_corr = corr_mat.max()
      
     for i in range(n):
-        data1 = df[value_cols[i]]
+        data1 = np.array(df[cols[i]])
         
         for j in range(n):
             ax = axarr[i,j]
             k = (i*n+j)
 
             if i != j:
-                data2 = df[value_cols[j]]
-                valid = ~(np.isnan(data1) | np.isnan(data2))
+                data2 = np.array(df[cols[j]])
+                valid = (data1 > 0) & (data2 > 0)
                 color = colors[k % len(colors)]
-                rho = np.corrcoef([data1[valid], data2[valid]])[0,1]
                 
-                if rho > 0.9:
-                    cmap = cmap2
-                elif rho > 0.7:
-                    cmap = cmap1
-                else:
-                    cmap = cmap0
+                x_vals = data1[valid]
+                y_vals = data2[valid]
                 
-                ax.hexbin(data1[valid], data2[valid], cmap=cmap, gridsize=gridsize, mincnt=1, edgecolors='none')
+                rho = corr_mat[i,j]
+                 
+                goodness = (rho-min_corr)/(max_corr-min_corr)
+                
+                cmap = LinearSegmentedColormap.from_list('{i}+{j}', [main_cmap(goodness), '#000000'])
+
+                ax.hexbin(x_vals, y_vals, cmap=cmap, gridsize=gridsize, mincnt=1, edgecolors='none')
 
                 if i > j:
                     txt = ax.text(0.5, 0.5, f'{rho:.2}', ha='center', va='center', transform=ax.transAxes, fontsize=1.5*fontsize)
@@ -232,7 +241,7 @@ def xy_plots(df, value_cols, ncols, pdf, colors=['#0080FF','#A0A000','#D00000'],
     plt.close()
 
 
-def correlation_plot(df, value_cols, pdf, colors=['#0080FF','#A0A000','#D00000'], figsize=10.0, bg_color='#B0B0B0'):
+def correlation_plot(df, value_cols, pdf, colors=['#0080FF','#A0A000','#D00000'], figsize=9.0, bg_color='#B0B0B0'):
     
     cmap = LinearSegmentedColormap.from_list('gud', colors)
     
@@ -251,7 +260,8 @@ def correlation_plot(df, value_cols, pdf, colors=['#0080FF','#A0A000','#D00000']
     # Colorbar
     ax3 = fig.add_axes([0.87, 0.85, 0.05, 0.10])
     
-    data = np.nan_to_num(np.array([df[col] for col in cols]))
+    data = np.array([df[col] for col in cols])
+    data[~(data > 0)] =  np.nanmean(data) # Zeros and nans
     
     corr_mat = distance.pdist(data, metric='correlation') # Correlation 'distance" : 1.0 - rho
     
