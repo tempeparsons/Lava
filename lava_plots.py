@@ -175,58 +175,59 @@ def xy_plots(df, value_cols, ncols, pdf, colors=['#0080FF','#A0A000','#FF0000'],
     fig, axarr = plt.subplots(n, n, squeeze=False, figsize=(figsize,figsize), sharex=True, sharey=True)
     
     gridsize = int(400//n)
-    
     fontsize = min(1e3/(figsize * n), 14)
-
 
     data = np.array([df[col] for col in cols])
     data[~(data > 0)] =  np.nanmean(data) # Zeros and nans
     corr_mat = distance.pdist(data, metric='correlation') # Correlation 'distance" : 1.0 - rho
+    linkage = hierarchy.ward(corr_mat)
+    order = hierarchy.leaves_list(linkage)[::-1]
+    
     corr_mat = 1.0 - distance.squareform(distance.pdist(data, metric='correlation'))
     min_corr = corr_mat.min()
     max_corr = corr_mat.max()
      
-    for i in range(n):
+    for row, i in enumerate(order):
         data1 = np.array(df[cols[i]])
         
-        for j in range(n):
-            ax = axarr[i,j]
-            k = (i*n+j)
+        for col, j in enumerate(order):
+            ax = axarr[n-row-1,col]
 
-            if i != j:
+            if 1: # i != j:
                 data2 = np.array(df[cols[j]])
-                valid = (data1 > 0) & (data2 > 0)
-                color = colors[k % len(colors)]
+                valid = (data1 > 0) & (data2 > 0) # no nans or zeros 
                 
                 x_vals = data1[valid]
                 y_vals = data2[valid]
                 
                 rho = corr_mat[i,j]
-                 
                 goodness = (rho-min_corr)/(max_corr-min_corr)
                 
                 cmap = LinearSegmentedColormap.from_list('{i}+{j}', [main_cmap(goodness), '#000000'])
-
                 ax.hexbin(x_vals, y_vals, cmap=cmap, gridsize=gridsize, mincnt=1, edgecolors='none')
 
-                if i > j:
+                if row > col:
                     txt = ax.text(0.5, 0.5, f'{rho:.2}', ha='center', va='center', transform=ax.transAxes, fontsize=1.5*fontsize)
                     txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
+            
+            #else:
+            #    txt = ax.text(0.5, 0.5, f'{cols[i]}', ha='center', va='center', transform=ax.transAxes, fontsize=1.5*fontsize)
  
+            
             ax.set_xticks([])
             ax.set_yticks([])
- 
-            if i == (n-1):
+            
+            if row == 0:
                 ax.set_xlabel(f'{cols[j]}', fontsize=fontsize)
                 
-            elif i == 0:    
+            elif row == (n-1):    
                 ax.xaxis.set_label_position('top') 
                 ax.set_xlabel(f'{cols[j]}', fontsize=fontsize)
   
-            if j == 0:
+            if col == 0:
                 ax.set_ylabel(f'{cols[i]}', fontsize=fontsize)
                 
-            elif j == (n-1):
+            elif col == (n-1):
                 ax.yaxis.set_label_position('right')     
                 ax.set_ylabel(f'{cols[i]}', fontsize=fontsize)
 
