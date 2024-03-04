@@ -13,7 +13,7 @@ from matplotlib.colors import LinearSegmentedColormap
 import lava_util as util
 import lava_plots as plots
 
-VERSION = '0.2.1'
+VERSION = '0.2.2'
 
 plots.VERSION = VERSION
 
@@ -30,7 +30,7 @@ FILE_EXTS_TXT = ('.txt',)
 FILE_EXTS_CSV = ('.csv','.tsv')
 
 DEFALUT_FC = 2.0
-DEFALUT_MAXP  = 4.32
+DEFALUT_MAXP  = 5.00
 DEFAULT_POS_COLOR = '#D00000'
 DEFAULT_NEG_COLOR = '#0080FF'
 DEFAULT_LOW_COLOR = '#A0A000'
@@ -145,11 +145,15 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
    # Rename more col headings, mark q95
    # Colour excel table
    
-   nmap = {'grp1grp2_FC':'log2_fold_change', 'Tpvals':'-log2_pvalue',
-           'pvals':'p-value', 'Tpvals_q95':'-log2_Q95_pvalue',
-           'zstd_grp1_q95':'Q95_sigma_A','zstd_grp2_q95':'Q95_sigma_B',
-           'nobs_grp1':'nobs_A', 'nobs_grp2':'nobs_B', 
+   nmap = {'grp1grp2_FC':'log2_fold_change','Tpvals_q95':'-log2_pvalue',
+           'pvals_q95':'p-value', 'nobs_orig_grp1':'nobs_A', 'nobs_orig_grp2':'nobs_B', 
            }
+   ### Check
+   #nmap = {'grp1grp2_FC':'log2_fold_change', 'Tpvals':'-log2_pvalue',
+   #        'pvals':'p-value', 'Tpvals_q95':'-log2_Q95_pvalue',
+   #        'zstd_grp1_q95':'Q95_sigma_A','zstd_grp2_q95':'Q95_sigma_B',
+   #        'nobs_orig_grp1':'nobs_A', 'nobs_orig_grp2':'nobs_B', 
+   #        }
    
    quad_map = {(True,True):'HIT_pos', (True,False):'HIT_neg', (False,True):'fail_pos', (False,False):'fail_neg', }
    
@@ -160,7 +164,9 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
    for key in keys:
        df = plotdict[key]
        lfc = np.array(df['grp1grp2_FC'])
-       pvs = np.array(df['Tpvals'])
+       ### Check
+       #pvs = np.array(df['Tpvals'])
+       pvs = np.array(df['Tpvals_q95'])
        n = len(lfc)
        
        quad_cats = [quad_map[((pvs[i] >= p_thresh and (abs(lfc[i]) >= f_thresh)), lfc[i] >= 0)] for i in range(n)]
@@ -168,7 +174,9 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
        fc = 2.0 ** (-lfc)
        df.insert(1, 'fold_change', fc)
        df.insert(1, 'hit_class', quad_cats)
-       df.sort_values(by=['pvals',], ascending=True, inplace=True)
+       ###
+       #df.sort_values(by=['pvals',], ascending=True, inplace=True)
+       df.sort_values(by=['pvals_q95',], ascending=True, inplace=True)
        df.rename(columns=nmap, inplace=True)
    
    if file_ext in FILE_EXTS_EXL:
@@ -687,6 +695,8 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         if extra_id_col:
             df2['protein_id'] = orig_df[extra_id_col]
         
+        df2['nobs_orig_grp1'] = df2.loc[:,grp1].count(axis=1)
+        df2['nobs_orig_grp2'] = df2.loc[:,grp2].count(axis=1)
         df2['nobs_grp1'] = df2.loc[:,grp1].count(axis=1)
         df2['nobs_grp2'] = df2.loc[:,grp2].count(axis=1)
         df2 = util.remove_rows(df2, len(grp1), len(grp2))
@@ -770,7 +780,13 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         col_selection = ['protein_id'] if extra_id_col else []
             
         # Reorder
-        col_selection += ['grp1grp2_FC', 'pvals', 'nobs_grp1', 'nobs_grp2', 'Tpvals', 'Tpvals_q95', 'zstd_grp1_q95', 'zstd_grp2_q95', 'zmean_grp2', 'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
+        col_selection += ['grp1grp2_FC', 'pvals_q95', 'Tpvals_q95', 'nobs_orig_grp1', 'nobs_orig_grp2',
+                          'zmean_grp2', 'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
+        
+        ### Check
+        #col_selection += ['grp1grp2_FC', 'pvals', 'nobs_orig_grp1', 'nobs_orig_grp2', 'Tpvals',
+        #                  'Tpvals_q95', 'zstd_grp1_q95', 'zstd_grp2_q95', 'zmean_grp2',
+        #                  'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
         
         # Orig data last
         col_selection += [c for c in df.columns if c.startswith('in_')]
@@ -1009,10 +1025,6 @@ def main(argv=None):
 
     lava(in_path, exp_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns,
          remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc)
-  
-    # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # #
-    # Add seccondary index to table out; only first use in PDF #
-    # # # # # # # # # # # # # # # # # # # # # # #  # # # # # # #
 
 
 if __name__ == '__main__':

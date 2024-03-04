@@ -332,7 +332,7 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
          ax0 = axs[row, 0]
          ax1 = axs[row, 1]
          
-         pvals = df['pvals'].to_list()
+         pvals = df['pvals_q95'].to_list()
          FCs = df['grp1grp2_FC'].to_list()
          
          if row == 0:
@@ -393,20 +393,22 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     
     if not markers:
         markers = []
-   
+        
+    pthresh_orig = pthresh
     pthresh = -np.log2(0.01 * pthresh)
     
-    high_qual = (np.array(df['zstd_grp1_q95']) != q951) & (np.array(df['zstd_grp2_q95']) != q952)
+    high_qual = (np.array(df['nobs_orig_grp1']) > 1) & (np.array(df['nobs_orig_grp2']) > 1)
     
-    has_zeros = (np.array(df['zstd_grp1_q95']) == 0.0) | (np.array(df['zstd_grp2_q95']) == 0.0)
+    has_zeros = (np.array(df['nobs_orig_grp1']) == 0) | (np.array(df['nobs_orig_grp2']) == 0)
     
     names = np.array(df.index)
     
-    pvalues = np.array(df['Tpvals'])
-    pvalues_q95 = np.array(df['Tpvals_q95'])
+    ##pvalues = np.array(df['Tpvals'])
+    ##pvalues_q95 = np.array(df['Tpvals_q95'])
     
-    nan_mask = np.isnan(pvalues)
-    pvalues[nan_mask] = pvalues_q95[nan_mask]
+    ##nan_mask = np.isnan(pvalues)
+    ##pvalues[nan_mask] = pvalues_q95[nan_mask]
+    pvalues = np.array(df['Tpvals_q95'])
     
     fcvalues = np.array(df['grp1grp2_FC'])
     
@@ -416,10 +418,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
         names = names[high_qual]
         high_qual = high_qual[high_qual]
         has_zeros = high_qual[high_qual]
-     
-    pos_overFC = []
-    neg_overFC = []
-    
+ 
     color_pos, color_low, color_neg = colors
     
     if split_x:
@@ -430,7 +429,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
          neg_split, pos_split = None, None
     
     y_label = 'p-value'
-    p_label = f'{2.0**-pthresh:.2g}'
+    p_label = f'{0.01 * pthresh_orig:.3g}'
     p_label_kw = dict(xytext=(2,2), xycoords='data', textcoords='offset points', color='#808080', fontsize=5, ha='left', va='bottom')
     
     figsize=(10,8)
@@ -607,15 +606,15 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
             continue
         
         if has_zeros[i]:
-          name = name + '*'
+            #name = '\u2070' + name
+            name = name + '$^{0}$'
+        
+        elif low_qual:
+            #name = '\u00b9' + name
+            name = name + '$^{1}$'
         
         if x >= FClim and y >= pthresh:
-            if low_qual:
-                 ax.scatter(x, y, s=size * 0.5, marker='h', color=color, **hit_kw)
-            
-            else:
-                 pos_overFC.append(name)
-                 ax.scatter(x, y, s=size, color=color, **hit_kw)
+            ax.scatter(x, y, s=size, color=color, **hit_kw)
             
             if hit_labels:
                 for a in (ax0, ax1, ax2):
@@ -628,11 +627,7 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
             continue
              
         if x <= -FClim and y >= pthresh:
-            if low_qual:
-                 ax.scatter(x, y, s=size * 0.5, marker='h', color=color, **hit_kw)
-            else:     
-                 neg_overFC.append(name)
-                 ax.scatter(x, y, s=size, color=color, **hit_kw)
+            ax.scatter(x, y, s=size, color=color, **hit_kw)
                  
             if hit_labels:
                 for a in (ax0, ax1, ax2):
