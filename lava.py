@@ -24,6 +24,7 @@ SOFT_PD = ('ProteomeDiscoverer', 'PD')
  
 VALID_SOFTWARE = SOFT_DN + SOFT_MQ + SOFT_PD
 DEFAULT_SOFTWARE = SOFT_PD[0]
+DEFAULT_MIN_PEPS = 2
 
 FILE_EXTS_EXL = ('.xls','.xlsx')
 FILE_EXTS_TXT = ('.txt',)
@@ -140,7 +141,7 @@ def _read_data(file_path):
     return df
 
     
-def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
+def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps):
    
    # Rename more col headings, mark q95
    # Colour excel table
@@ -155,12 +156,13 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
    #        'nobs_orig_grp1':'nobs_A', 'nobs_orig_grp2':'nobs_B', 
    #        }
    
-   quad_map = {(True,True):'HIT_pos', (True,False):'HIT_neg', (False,True):'fail_pos', (False,False):'fail_neg', }
+   quad_map = {(True,True):'POS', (True,False):'NEG', (False,True):'fail_pos', (False,False):'fail_neg', }
    
    path_root, file_ext = os.path.splitext(save_path)
    file_ext = file_ext.lower()
    
    keys = [f'{a}:::{b}' for a,b in pairs]
+   color_dict = {}
    for key in keys:
        df = plotdict[key]
        lfc = np.array(df['grp1grp2_FC'])
@@ -169,22 +171,142 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh):
        pvs = np.array(df['Tpvals_q95'])
        n = len(lfc)
        
-       quad_cats = [quad_map[((pvs[i] >= p_thresh and (abs(lfc[i]) >= f_thresh)), lfc[i] >= 0)] for i in range(n)]
+       if 'npeps' in df:
+           npeps = np.array(df['npeps'])
+       else:
+           npeps = np.full(n, min_peps)
+       
+       cats = []
+       cat_colors = []
+       for i in range(n):
+           if npeps[i] < min_peps:
+               klass = 'low_pep'
+               color = 'background-color: #E0E0E0'
+ 
+           elif pvs[i] >= p_thresh:
+               if lfc[i] >= f_thresh:
+                  klass = 'POS'
+                  color = 'background-color: #FFD0D0'
+               elif lfc[i] <= -f_thresh:
+                  klass = 'NEG'
+                  color = 'background-color: #D0D0FF'
+               else:
+                  klass = 'fail'
+                  color = 'background-color: #FFFFD0'
+ 
+           else:
+                klass = 'fail'
+                color = 'background-color: #FFFFD0'
+ 
+           cat_colors.append(color)
+           cats.append(klass)
+       
+         
        
        fc = 2.0 ** (-lfc)
        df.insert(1, 'fold_change', fc)
-       df.insert(1, 'hit_class', quad_cats)
+       df.insert(1, 'hit_class', cats)
        ###
        #df.sort_values(by=['pvals',], ascending=True, inplace=True)
-       df.sort_values(by=['pvals_q95',], ascending=True, inplace=True)
-       df.rename(columns=nmap, inplace=True)
-   
-   if file_ext in FILE_EXTS_EXL:
-       with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
-           for key in keys:
-               plotdict[key].to_excel(writer, sheet_name=key.replace(':::', '_vs_'))
- 
        
+       df.rename(columns=nmap, inplace=True)
+       
+       sort_cols = [-pvs]
+       sort_cols.append(~((lfc <= -f_thresh) & (pvs >= p_thresh)))
+       sort_cols.append(~((lfc >= f_thresh) & (pvs >= p_thresh)))
+       
+       if 'npeps' in df:
+         sort_cols.append(np.array(df['npeps'] < min_peps))
+       
+       sort_idx = np.lexsort(tuple(sort_cols))
+       color_dict[key] = [cat_colors[i] for i in sort_idx]
+       plotdict[key] = df.iloc[sort_idx]
+       
+       #df.sort_values(by=['pvals_q95',], ascending=True, inplace=True)
+    
+   def grp1_col_bg(vals):
+   
+     return ['background-color: #EEFFEE'] * len(vals)
+
+   def grp2_col_bg(vals):
+   
+     return ['background-color: #FFEEFF'] * len(vals)
+   
+   def color_klass(vals):
+     
+     return ['background-color: #FFEEFF'] * len(vals)
+   
+   def color_fc(vals):
+     
+     styles = ['font-weight: bold' if abs(v) > f_thresh else None for v in vals]
+     
+     return styles
+   
+   op_thresh = 2.0 ** (-p_thresh)
+   
+   def color_pv(vals):
+     
+     styles = ['font-weight: bold' if v < op_thresh else None for v in vals]
+     
+     return styles
+
+   def color_class(vals):
+     
+     styles = []
+     
+     for v in vals:
+         if v > f_thresh:
+             styles.append('color: red')
+ 
+         elif v < -f_thresh:
+             styles.append('color: blue')
+ 
+         else:
+             styles.append(None)
+     
+     return styles
+
+   def color_nobs(vals):
+     
+     styles = ['color: red' if v < 2 else None for v in vals]
+
+     return styles
+
+   def color_npep(vals):
+     
+     styles = ['color: red' if v < min_peps else None for v in vals]
+
+     return styles
+     
+   if file_ext in FILE_EXTS_EXL:
+       with pd.ExcelWriter(save_path, engine='xlsxwriter') as writer:
+           
+           for key in keys:
+               df = plotdict[key]
+               in_colsA = [x for x in list(df.columns) if x.startswith('inA_') or x.startswith('npepA_')]
+               in_colsB = [x for x in list(df.columns) if x.startswith('inB_') or x.startswith('npepB_')]
+               sheet_name=key.replace(':::', '_vs_')
+               
+               if 'npeps' in df:
+                   df.style.apply(grp1_col_bg, axis=1, subset=in_colsA)\
+                           .apply(grp2_col_bg, axis=1, subset=in_colsB)\
+                           .apply(lambda v:color_dict[key], axis=0, subset=['hit_class', 'fold_change','log2_fold_change', 'p-value', '-log2_pvalue'])\
+                           .apply(color_nobs, axis=1, subset=['nobs_A','nobs_B'])\
+                           .apply(color_npep, axis=1, subset=['npeps'])\
+                           .apply(color_fc, axis=1, subset=['log2_fold_change'])\
+                           .apply(color_pv, axis=1, subset=['p-value'])\
+                           .to_excel(writer, sheet_name=sheet_name)
+               
+               else:
+                   df.style.apply(grp1_col_bg, axis=1, subset=in_colsA)\
+                           .apply(grp2_col_bg, axis=1, subset=in_colsB)\
+                           .apply(lambda v:color_dict[key], axis=0, subset=['hit_class', 'fold_change','log2_fold_change', 'p-value', '-log2_pvalue'])\
+                           .apply(color_nobs, axis=1, subset=['nobs_A','nobs_B'])\
+                           .apply(color_fc, axis=1, subset=['log2_fold_change'])\
+                           .apply(color_pv, axis=1, subset=['p-value'])\
+                           .to_excel(writer, sheet_name=sheet_name)
+               
+        
        info(f'Saved tables to {save_path}')
    
    else:
@@ -216,6 +338,7 @@ def _read_exp_file(df, file_path):
     
     group_dicts = []
     col_rename = None
+    pep_count_cols = {}
     
     with open(file_path, newline='') as file_obj:
         for row in csv.reader(file_obj, delimiter=delimiter):
@@ -236,7 +359,15 @@ def _read_exp_file(df, file_path):
             col_name, *groups = row
             col_name = col_name.strip()
             
-            if col_name not  in df:
+            if ':' in col_name:
+              col_name, count_col_name = col_name.split(':')
+              
+              if count_col_name not in df:
+                fail(f'Peptide count column named {count_col_name} is not present in input data')
+              
+              pep_count_cols[col_name] = count_col_name
+              
+            if col_name not in df:
               fail(f'Sample column named {col_name} is not present in input data')
             
             for i, group in enumerate(groups):
@@ -244,14 +375,19 @@ def _read_exp_file(df, file_path):
                 
             
     if group_dicts:
+        col_rename = None
         for i, group_dict in enumerate(group_dicts):
              n_single = len([grp for grp in group_dict if len(group_dict[grp]) == 1])
+             
              if n_single == len(group_dict):
                  info('Renaming columns according to exp. design file:')
                  col_rename = {group_dict[grp][0]:grp for grp in group_dict}
                  
                  for orig in sorted(col_rename):
                      info(f'  from "{orig}" to "{col_rename[orig]}"')
+                     if pep_count_cols:
+                       pep_count_cols[col_rename[orig]] = pep_count_cols[orig]
+                       del pep_count_cols[orig]
                  
                  renamed_group_dicts = []
                  for j, group_dict in enumerate(group_dicts):
@@ -271,7 +407,7 @@ def _read_exp_file(df, file_path):
     else:
         fail(f'Experimental design file {file_path} did not appear to contain anything useful')
     
-    return group_dicts # a list of {group_nameA:[col_name1, col_name2], group_nameB:[col_name3, col_name4],}
+    return group_dicts, pep_count_cols # a list of {group_nameA:[col_name1, col_name2], group_nameB:[col_name3, col_name4],}
     
       
 def _split_col_groups(df, group_spec):
@@ -363,8 +499,8 @@ def _check_path(file_path, should_exist=True):
 
     
 def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table_path=None,
-         idx_cols=None, ref_groups=None, markers=None, col_groups=None, remove_contaminents=True,
-         f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP, quiet=False,
+         idx_cols=None, ref_groups=None, markers=None, col_groups=None, min_peps=DEFAULT_MIN_PEPS, pep_col=None,
+         remove_contaminents=True,  f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP, quiet=False,
          colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
          split_x=False, hit_labels=False, hq_only=False, znorm_fc=False):
     
@@ -401,9 +537,10 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     cols = list(df.columns)
     n_cols = len(cols)
     group_dicts = None
+    pep_count_cols = None
     
     if exp_path:  # Read from exp design file if possible
-        group_dicts = _read_exp_file(df, exp_path)
+        group_dicts, pep_count_cols = _read_exp_file(df, exp_path)
    
     elif col_groups:
         group_dicts = _split_col_groups(df, col_groups)
@@ -433,10 +570,21 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     elif not group_dicts:
         fail('No groups specified')
     
+    if pep_col:
+        if pep_col not in df:
+            fail(f'Peptide count column "{pep_col}" not found in input file')
+        else:
+            info(f'Using peptide count column "{pep_col}"')
+    
+    else:
+       min_peps = 1
+        
     for idx_col in idx_cols:
         info(f'Using index column {cols.index(idx_col)+1} : "{idx_col}"')
     
     option_report.append(('Index column(s)', ' '.join(idx_cols)))
+    option_report.append(('Peptide column', pep_col or ''))
+    option_report.append(('Min hit peptides', min_peps))
     
     # Markers
     
@@ -532,6 +680,18 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
                     info(f'   {g1}  -  {g2}')
                     pairs.append((g1, g2))
                     option_report.append((f'Pair {len(pairs)}', f'{g1}  vs  {g2}'))
+     
+    
+    """ 
+    if pep_count_cols:
+        info(f'Using peptide count columns:')
+        rep_text = []
+        for col in sorted(pep_count_cols):
+           info(f'   {col}  :  {pep_count_cols[col]}')
+           rep_text.append(f'{col} : {pep_count_cols[col]}')
+           
+        option_report.append(('Pep. count cols', ','.join(rep_text)))
+    """
          
     pre_cull = df.shape
     
@@ -544,13 +704,20 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
 
     if remove_contaminents and software in SOFT_PD:
         df = df[df['Description'].str.contains('Keratin') == False]
-
+    
     post_cull = df.shape
 
     culled_rows = pre_cull[0] - post_cull[0]
-    info(f'Removed {culled_rows} contaminant rows from {pre_cull[0]} total')
+    info(f'Removed {culled_rows} contaminant rows from {pre_cull[0]}, total')
     option_report.append((f'Contaminent rows', pre_cull[0]))
     
+    if pep_col and min_peps > 1:
+       n1 = df.shape[0]
+       #df = df[df[pep_col] >= min_peps]
+       nlow = np.count_nonzero(df[pep_col] < min_peps)
+       info(f'Found {nlow} low peptide (<{min_peps}) rows from {n1,} total')
+       option_report.append((f'Low peptide rows', nlow))
+       
     if not quiet:
         info('Your data now has the following structure:')
         print(df.head(10))
@@ -687,13 +854,22 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         
         # Add original data to output
         for col1 in grp1:
-            df2['in_' + col1] = orig_df[col1]
+            df2['inA_' + col1] = orig_df[col1]
+            
+            #if pep_count_cols:
+            #   df2['npepA_' + col1] = orig_df[pep_count_cols[col1]]
 
         for col2 in grp2:
-            df2['in_' + col2] = orig_df[col2]
+            df2['inB_' + col2] = orig_df[col2]
+            
+            #if pep_count_cols:
+            #   df2['npepB_' + col2] = orig_df[pep_count_cols[col2]]
         
         if extra_id_col:
             df2['protein_id'] = orig_df[extra_id_col]
+        
+        if pep_col:
+            df2['npeps'] = orig_df[pep_col]
         
         df2['nobs_orig_grp1'] = df2.loc[:,grp1].count(axis=1)
         df2['nobs_orig_grp2'] = df2.loc[:,grp2].count(axis=1)
@@ -783,13 +959,19 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         col_selection += ['grp1grp2_FC', 'pvals_q95', 'Tpvals_q95', 'nobs_orig_grp1', 'nobs_orig_grp2',
                           'zmean_grp2', 'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
         
+        if pep_col:
+            col_selection.append('npeps')
+            
         ### Check
         #col_selection += ['grp1grp2_FC', 'pvals', 'nobs_orig_grp1', 'nobs_orig_grp2', 'Tpvals',
         #                  'Tpvals_q95', 'zstd_grp1_q95', 'zstd_grp2_q95', 'zmean_grp2',
         #                  'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
         
         # Orig data last
-        col_selection += [c for c in df.columns if c.startswith('in_')]
+        col_selection += [c for c in df.columns if c.startswith('inA_')]
+        col_selection += [c for c in df.columns if c.startswith('inB_')]
+        #col_selection += [c for c in df.columns if c.startswith('npepA_')]
+        #col_selection += [c for c in df.columns if c.startswith('npepB_')]
         
         FZdfs.append(FZdf[col_selection])
  
@@ -844,11 +1026,21 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         
         plt.show()
         """
-        plots.volcano(pdf, pair_name, plotdict[pair_name], q95dict[pair_name], f_thresh, p_thresh, colors,
-                      split_x, hq_only, hit_labels, markers, lw=0.25, ls='--')
+
+        plots.volcano(pdf, pair_name, plotdict[pair_name], q95dict[pair_name], f_thresh, p_thresh, min_peps,
+                      colors, split_x, hq_only, hit_labels, markers, lw=0.25, ls='--', marker_text_col=None)
+        
+        """
+        if pep_count_cols:
+            #npep_cols = [x for x in df.columns if x.startswith('npep')]
+            #marker_text_col = 'max_pep'
+            #df[marker_text_col] = df[npep_cols].max(axis=1).astype(int)
+            plots.volcano(pdf, pair_name, plotdict[pair_name], q95dict[pair_name], f_thresh, p_thresh, colors,
+                          split_x, hq_only, hit_labels=True, markers=None, lw=0.25, ls='--', marker_text_col='npeps')
+        """
         
     if table_path:
-        save_volcano_table(pairs, plotdict, table_path, f_thresh, p_thresh)
+        save_volcano_table(pairs, plotdict, table_path, f_thresh, p_thresh, min_peps)
     
     
     if pdf:
@@ -890,6 +1082,14 @@ def main(argv=None):
     default_idx = ' '.join(DEFAULT_INDEX_COLS)
     arg_parse.add_argument('-i', '--index-columns', dest="i", metavar='INDEX_COLUMN', default=None,
                            help=f'The names, or numbers starting from 1, of one or more input columns used to uniquely index the data rows. If not specified, column names will be sought from the default list: {default_idx}.')
+
+    arg_parse.add_argument('-n', '--min-peps', dest="n", metavar='PEP_COUNT_COLUMN', default=DEFAULT_MIN_PEPS,
+                           help=f'The minimum number of theoretical peptides required for a protein to be considered as a hit. '\
+                                  'No selection will be done unless the peptide column is specified via the -nc option.'\
+                                  'Proteins that fail will be reported separately.')
+
+    arg_parse.add_argument('-nc', '--num-peps-column', dest="nc", metavar='PEP_COUNT_COLUMN', default=None,
+                           help=f'The name, or number starting from 1, of the input data column containing peptide counts. Proteins may be filtered according to this column using the -n option.')
 
     arg_parse.add_argument('-r', '--ref-groups', dest="r", metavar='GROUP_NAME', nargs='+',  default=None,
                            help='An optional list of names specifiying which group(s) of samples/columns are considered reference groups. '
@@ -973,6 +1173,8 @@ def main(argv=None):
     quiet = args['q']
     log = args['l']
     znorm_fc = args['z']
+    min_peps = args['n']
+    pep_col = args['nc']
     
     split_x = args['xs']
     
@@ -1023,7 +1225,7 @@ def main(argv=None):
     
     colors = (pos_color, low_color, neg_color)
 
-    lava(in_path, exp_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns,
+    lava(in_path, exp_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns, min_peps, pep_col,
          remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc)
 
 
@@ -1038,8 +1240,8 @@ python3 lava.py VolcCLI_PD1.xlsx -o VolcCLI_PD1_out.xlsx -g VolcCLI_PD1.pdf -e g
 python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava01.pdf -o test/Nadine_LVA/Nadine_LVA_lava.xlsx -r CNT -f 10 -p 0.5 -i "Gene Symbol"
 python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava03.pdf -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava.xlsx -r WT -f 10 -p 0.5 -i "Gene Symbol"
 
-python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava02_znorm.pdf -z -o test/Nadine_LVA/Nadine_LVA_lava_znorm.xlsx -r CNT -f 10 -p 0.5 -i "Gene Symbol"
-python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava04_znorm.pdf -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava_znorm.xlsx -r WT -f 10 -p 0.5 -i "Gene Symbol"
+python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava02_znorm.pdf -z -o test/Nadine_LVA/Nadine_LVA_lava02_znorm.xlsx -r CNT -f 10 -p 5 -i "Gene Symbol"
+python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05_znorm.pdf -nc "Number of Peptides by Search Engine CHIMERYS" -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05_znorm.xlsx -r WT -f 10 -p 0.5 -i "Gene Symbol"
 
 python3 lava.py test/111120_IC/111120_EV_Fraction_IC.xlsx -e test/111120_IC/exptdesign.txt -g test/111120_IC/111120_IC_plotsZ01.pdf -o test/111120_IC/111120_IC_plotdataZ01.xlsx -f 6.0 -z
 

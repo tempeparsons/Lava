@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.patheffects as PathEffects
 from matplotlib.lines import Line2D
+from matplotlib.text import Text
 from matplotlib.patches import Patch
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from scipy.cluster import hierarchy
@@ -193,26 +194,21 @@ def xy_plots(df, value_cols, ncols, pdf, colors=['#0080FF','#A0A000','#FF0000'],
         for col, j in enumerate(order):
             ax = axarr[n-row-1,col]
 
-            if 1: # i != j:
-                data2 = np.array(df[cols[j]])
-                valid = (data1 > 0) & (data2 > 0) # no nans or zeros 
-                
-                x_vals = data1[valid]
-                y_vals = data2[valid]
-                
-                rho = corr_mat[i,j]
-                goodness = (rho-min_corr)/(max_corr-min_corr)
-                
-                cmap = LinearSegmentedColormap.from_list('{i}+{j}', [main_cmap(goodness), '#000000'])
-                ax.hexbin(x_vals, y_vals, cmap=cmap, gridsize=gridsize, mincnt=1, edgecolors='none')
-
-                if row > col:
-                    txt = ax.text(0.5, 0.5, f'{rho:.2}', ha='center', va='center', transform=ax.transAxes, fontsize=1.5*fontsize)
-                    txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
+            data2 = np.array(df[cols[j]])
+            valid = (data1 > 0) & (data2 > 0) # no nans or zeros 
             
-            #else:
-            #    txt = ax.text(0.5, 0.5, f'{cols[i]}', ha='center', va='center', transform=ax.transAxes, fontsize=1.5*fontsize)
- 
+            x_vals = data1[valid]
+            y_vals = data2[valid]
+            
+            rho = corr_mat[i,j]
+            goodness = (rho-min_corr)/(max_corr-min_corr)
+            
+            cmap = LinearSegmentedColormap.from_list('{i}+{j}', [main_cmap(goodness), '#000000'])
+            ax.hexbin(x_vals, y_vals, cmap=cmap, gridsize=gridsize, mincnt=1, edgecolors='none')
+
+            if row > col:
+                txt = ax.text(0.5, 0.5, f'{rho:.2}', ha='center', va='center', transform=ax.transAxes, fontsize=1.5*fontsize)
+                txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')]) 
             
             ax.set_xticks([])
             ax.set_yticks([])
@@ -381,10 +377,10 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
     plt.close()
 
 
-def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000','#D00000'],
+def volcano(pdf, pair_name, df, q95, FClim, pthresh, min_peps, colors=['#0080FF','#A0A000','#D00000'],
             split_x=True, hq_only=False, hit_labels=True, markers=None,
             lw=0.25, ls='--', lcolor='#808080', max_size=160.0, minsize=8.0,
-            label_size=5.0):
+            label_size=5.0, show_low_pep=True, marker_text_col=None):
     
     cmap = LinearSegmentedColormap.from_list('volc', colors[::-1])
     
@@ -397,11 +393,17 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     pthresh_orig = pthresh
     pthresh = -np.log2(0.01 * pthresh)
     
-    high_qual = (np.array(df['nobs_orig_grp1']) > 1) & (np.array(df['nobs_orig_grp2']) > 1)
+    marker_texts = df[marker_text_col] if marker_text_col else None
     
+    high_qual = (np.array(df['nobs_orig_grp1']) > 1) & (np.array(df['nobs_orig_grp2']) > 1)
     has_zeros = (np.array(df['nobs_orig_grp1']) == 0) | (np.array(df['nobs_orig_grp2']) == 0)
     
     names = np.array(df.index)
+    
+    if 'npeps' in df:
+      npeps = np.array(df['npeps'])
+    else:
+      npeps = np.full(len(names), min_peps)
     
     ##pvalues = np.array(df['Tpvals'])
     ##pvalues_q95 = np.array(df['Tpvals_q95'])
@@ -430,7 +432,8 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     
     y_label = 'p-value'
     p_label = f'{0.01 * pthresh_orig:.3g}'
-    p_label_kw = dict(xytext=(2,2), xycoords='data', textcoords='offset points', color='#808080', fontsize=5, ha='left', va='bottom')
+    p_label_kw = dict(xytext=(2,2), xycoords='data', textcoords='offset points',
+                      color='#808080', fontsize=5, ha='left', va='bottom')
     
     figsize=(10,8)
     xmin, xmax = xlims
@@ -533,7 +536,13 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     fig.subplots_adjust(wspace=0.05)
     fig.set_clip_on(False)
     
-    ax1.set_title(pair_name.replace(':::',' vs '), fontsize=18)
+    if marker_texts is None:
+        title = pair_name.replace(':::',' vs ')
+    else:
+        title = pair_name.replace(':::',' vs ')
+        title = 'Max. observed peptides for ' + title
+    
+    ax1.set_title(title, fontsize=18)
     ax1.set_xlabel('log2 fold change')
     
     pnorm = np.array(pvalues)
@@ -550,15 +559,18 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     sizes = np.clip(sizes, minsize, max_size)
     
     
-    scatter_kw = dict(alpha=0.4, edgecolors='none', clip_on=False)
-    hit_kw = dict(alpha=1.0, clip_on=False, edgecolor='k', linewidth=0.5, zorder=10)
+    scatter_kw = dict(alpha=0.5, edgecolors='none', clip_on=False)
+    hit_kw = dict(alpha=1.0, clip_on=False, edgecolor='k', linewidth=1.0)
+    hit_txt_kw = dict(alpha=1.0, clip_on=False, va='center', ha='center', fontsize=label_size)
    
     # middle bounds
     m0 = xmin
     m1 = xmax
- 
+    
+    unimportant = (pvalues < pthresh) | (np.abs(fcvalues) < FClim) | (npeps < min_peps)
+    
     if ax0:
-        selection = fcvalues < neg_split[0]
+        selection = (fcvalues < neg_split[0]) & high_qual & unimportant
         
         if np.any(selection):
             colors = [cmap(w) for w in weights[selection]]
@@ -567,14 +579,14 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
         m0 = neg_split[1]
         
     if ax2:
-        selection = fcvalues > pos_split[1]
+        selection = (fcvalues > pos_split[1])  & high_qual & unimportant
         if np.any(selection):
             colors = [cmap(w) for w in weights[selection]]
             ax2.scatter(fcvalues[selection], pvalues[selection], s=sizes[selection], c=colors, **scatter_kw)
         
         m1 = pos_split[0]
     
-    selection = (fcvalues >= m0) & (fcvalues <= m1) & high_qual
+    selection = (fcvalues >= m0) & (fcvalues <= m1) & high_qual & unimportant
     
     if np.any(selection):
         colors = [cmap(w) for w in weights[selection]]
@@ -590,9 +602,6 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
         x = fcvalues[i]
         y = pvalues[i]
         
-        if hq_only and low_qual:
-            continue
-        
         if ax0 and (x <= neg_split[0]):
             ax = ax0
         elif ax2 and (x >= pos_split[1]):
@@ -605,50 +614,80 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
             ax.scatter(x, y, s=size, color='k', edgecolor='k', clip_on=False, zorder=11)
             continue
         
-        if has_zeros[i]:
-            #name = '\u2070' + name
-            name = name + '$^{0}$'
+        low_pep = npeps[i] < min_peps
         
-        elif low_qual:
-            #name = '\u00b9' + name
-            name = name + '$^{1}$'
+        if low_pep and not show_low_pep:
+            continue
         
-        if x >= FClim and y >= pthresh:
-            ax.scatter(x, y, s=size, color=color, **hit_kw)
+        if hq_only and low_qual:
+            continue
+        
+        if marker_texts is None:
+            text_alpha = 1.0
             
-            if hit_labels:
-                for a in (ax0, ax1, ax2):
-                  if not a:
-                    continue
+            if low_pep:
+               text_color = lcolor
+               text_alpha = 0.5
+               
+            elif has_zeros[i]:
+                name = name + '$^{0}$'
+                text_color = '#400040'
  
-                  txt = a.annotate(name, xy=(x, y), xytext=(ds, ds), fontsize=label_size, textcoords='offset points', clip_on=False, zorder=11)
-                  txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
+            elif low_qual:
+                name = name + '$^{1}$'
+                text_color = '#400040'
+ 
+            else:
+                text_color = '#000000'
+        else:
+            text_color = '#00000080'
+        
+        pos_hit = x >= FClim and y >= pthresh
+        neg_hit = x <= -FClim and y >= pthresh
+        
+        
+        if pos_hit or neg_hit:
+            if marker_texts is None:
+                if low_pep:
+                    z_order = 9
+                    ax.scatter(x, y, s=minsize, color=lcolor, edgecolor='none', alpha=0.5, zorder=z_order)
+                else:
+                    z_order = 11
+                    ax.scatter(x, y, s=size, color=color, zorder=z_order, **hit_kw)
+            else:
+                z_order = 11
+                ax.text(x, y, marker_texts[i], color='k', zorder=z_order, **hit_txt_kw)
+                text_color = color
+                
+            if hit_labels:
+                if pos_hit:
+                    xytext=(ds, ds)
+                    ha='left'
+                
+                else:
+                    xytext=(-ds, ds)
+                    ha='right'
+                
+                for a in (ax0, ax1, ax2):
+                    if not a:
+                        continue
+ 
+                    txt = a.annotate(name, xy=(x, y), alpha=text_alpha, color=text_color, xytext=xytext, fontsize=label_size,
+                                     textcoords='offset points', ha=ha, clip_on=False, zorder=z_order+1)
+                    txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
              
             continue
              
-        if x <= -FClim and y >= pthresh:
-            ax.scatter(x, y, s=size, color=color, **hit_kw)
-                 
-            if hit_labels:
-                for a in (ax0, ax1, ax2):
-                  if not a:
-                    continue
-                  txt = a.annotate(name, xy=(x, y), xytext=(-ds, ds), fontsize=label_size, textcoords='offset points', ha='right', clip_on=False, zorder=11)
-                  txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
-            
-            continue
- 
         if low_qual:
-            ax.scatter(x, y, s=size * 0.5, marker='v', color=color, zorder=12) # color=color_low
-            continue
-        
+            ax.scatter(x, y, s=minsize, alpha=0.5, edgecolor='none', color=color, zorder=9) # color=color_low           
+               
     for x, y, ds, name in marker_text:
          txt = ax.annotate(name, xy=(x, y), xytext=(ds, ds), textcoords='offset points',
                           fontsize=label_size, clip_on=False)
          txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
     
     ax = ax0 if ax0 else ax1
-    ax.text(0.05, 0.05, f'Greater in {group2}', color=color_neg, ha='left', va='top', transform=ax.transAxes, fontsize=10, clip_on=False)
+    ax.text(0.05, -0.05, f'Greater in {group2}', color=color_neg, ha='left', va='top', transform=ax.transAxes, fontsize=10, clip_on=False)
     
     ax.set_ylim(0.0)
     pmax = math.ceil(np.nanmax(pvalues))
@@ -661,7 +700,19 @@ def volcano(pdf, pair_name, df, q95, FClim, pthresh, colors=['#0080FF','#A0A000'
     ax.set_yticklabels(y_ticks)
     
     ax = ax2 if ax2 else ax1
-    ax.text(0.95, 0.05, f'Greater in {group1}', color=color_pos, ha='right', va='top', transform=ax.transAxes, fontsize=10, clip_on=False)
+    ax.text(0.95, -0.05, f'Greater in {group1}', color=color_pos, ha='right', va='top', transform=ax.transAxes, fontsize=10, clip_on=False)
+     
+    ax.scatter([], [], s=2*minsize, color=cmap(0.9), edgecolor='k', label='+ve hit')
+    ax.scatter([], [], s=2*minsize, color=cmap(0.1), edgecolor='k', label='-ve hit')
+    ax.scatter([], [], s=minsize, color=cmap(0.5), label='insignificant')
+    if min_peps > 1:
+       ax.scatter([], [], s=minsize, color=lcolor, edgecolor='none',  alpha=0.5, label='low pep count')
+    if markers:
+       ax.scatter([], [], s=minsize, color='k', label='marker')
+    ax.scatter([], [], s=32, marker="$X^0$", color='#400040', edgecolor='none', label='vs all zeros')
+    ax.scatter([], [], s=32, marker="$X^1$", color='#400040', edgecolor='none', label='vs single')
+              
+    ax.legend(fontsize=7, loc='lower right')
     
     ax1.set_facecolor('none') # Stops covering part of text
     
