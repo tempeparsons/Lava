@@ -379,7 +379,7 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
 
 def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0A000','#D00000'],
             split_x=True, hq_only=False, hit_labels=True, markers=None, lw=0.25, ls='--', lcolor='#808080',
-            max_size=160.0, minsize=8.0, label_size=5.0, show_low_pep=True, marker_text_col=None):
+            max_size=160.0, min_size=8.0, label_size=5.0, show_low_pep=True, marker_text_col=None):
     
     cmap = LinearSegmentedColormap.from_list('volc', colors[::-1])
     group1, group2 = pair_name.split(':::')
@@ -394,6 +394,8 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     
     high_qual = (np.array(df['nobs_orig_grp1']) > 1) & (np.array(df['nobs_orig_grp2']) > 1)
     has_zeros = (np.array(df['nobs_orig_grp1']) == 0) | (np.array(df['nobs_orig_grp2']) == 0)
+    
+    intensity = np.maximum(np.array(df['zmean_grp1']), np.array(df['zmean_grp2']))
     
     names = np.array(df.index)
     
@@ -453,8 +455,6 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
         ax1.spines['left'].set_visible(False)
         ax1.spines['right'].set_visible(False)
         ax2.spines['left'].set_visible(False)
-        #ax2.yaxis.tick_right()
-        #ax2.yaxis.set_label_position("right")
         ax0.axhline(pthresh, **hline_kw)
         ax1.axhline(pthresh, **hline_kw)
         ax2.axhline(pthresh, **hline_kw)
@@ -506,8 +506,6 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
         ax2.set_xlim(p2, xmax)
         ax1.spines['right'].set_visible(False)
         ax2.spines['left'].set_visible(False)
-        #ax2.yaxis.tick_right()
-        #ax2.yaxis.set_label_position("right")
         ax1.axhline(pthresh, **hline_kw)
         ax2.axhline(pthresh, **hline_kw)
         ax1.annotate(p_label, (xmin, pthresh), **p_label_kw)
@@ -552,12 +550,14 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     weights /= np.abs(weights).max()
     weights = (1.0 + weights) / 2.0 # 0..1
     
-    sizes = max_size * pnorm * pnorm * fcnorm * fcnorm # 0 .. max_size
-    sizes = np.clip(sizes, minsize, max_size)
+    intensity -= intensity.min()
+    intensity /= intensity.max() # 0..1
+    intensity **= 2.0
     
+    sizes = min_size + (max_size-min_size) * intensity # min_size .. max_size
     
     scatter_kw = dict(alpha=0.5, edgecolors='none', clip_on=False)
-    hit_kw = dict(alpha=1.0, clip_on=False, edgecolor='k', linewidth=1.0)
+    hit_kw = dict(alpha=1.0, clip_on=False, edgecolor='k', linewidth=0.5)
     hit_txt_kw = dict(alpha=1.0, clip_on=False, va='center', ha='center', fontsize=label_size)
    
     # middle bounds
@@ -647,10 +647,10 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
             if marker_texts is None:
                 if low_pep:
                     z_order = 9
-                    ax.scatter(x, y, s=minsize, color=lcolor, edgecolor='none', alpha=0.5, zorder=z_order)
+                    ax.scatter(x, y, s=size, color=lcolor, edgecolor='none', alpha=0.5, zorder=z_order)
                 else:
                     z_order = 11
-                    ax.scatter(x, y, s=size, color=color, zorder=z_order, **hit_kw)
+                    ax.scatter(x, y, s=size, color=color, zorder=size, **hit_kw)
             else:
                 z_order = 11
                 ax.text(x, y, marker_texts[i], color='k', zorder=z_order, **hit_txt_kw)
@@ -676,7 +676,7 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
             continue
              
         if low_qual:
-            ax.scatter(x, y, s=minsize, alpha=0.5, edgecolor='none', color=color, zorder=9) # color=color_low           
+            ax.scatter(x, y, s=min_size, alpha=0.5, edgecolor='none', color=color, zorder=9) # color=color_low           
                
     for x, y, ds, name in marker_text:
          txt = ax.annotate(name, xy=(x, y), xytext=(ds, ds), textcoords='offset points',
@@ -699,17 +699,19 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     ax = ax2 if ax2 else ax1
     ax.text(0.95, -0.05, f'Greater in {group1}', color=color_pos, ha='right', va='top', transform=ax.transAxes, fontsize=10, clip_on=False)
      
-    ax.scatter([], [], s=2*minsize, color=cmap(0.9), edgecolor='k', label='+ve hit')
-    ax.scatter([], [], s=2*minsize, color=cmap(0.1), edgecolor='k', label='-ve hit')
-    ax.scatter([], [], s=minsize, color=cmap(0.5), label='insignificant')
+    ax.scatter([], [], s=0.5*min_size, color='w', edgecolor='k', linewidth=0.5, label='low abundance')
+    ax.scatter([], [], s=5*min_size, color='w', edgecolor='k', linewidth=0.5, label='high abundance')
+    ax.scatter([], [], s=2*min_size, color=cmap(0.9), edgecolor='k', linewidth=0.5, label='+ve hit')
+    ax.scatter([], [], s=2*min_size, color=cmap(0.1), edgecolor='k', linewidth=0.5, label='-ve hit')
+    ax.scatter([], [], s=2*min_size, color=cmap(0.5), label='insignificant')
     if min_peps > 1:
-       ax.scatter([], [], s=minsize, color=lcolor, edgecolor='none',  alpha=0.5, label='low pep count')
+       ax.scatter([], [], s=2*min_size, color=lcolor, edgecolor='none', alpha=0.5, label='low pep count')
     if markers:
-       ax.scatter([], [], s=minsize, color='k', label='marker')
+       ax.scatter([], [], s=2*min_size, color='k', label='marker')
     ax.scatter([], [], s=32, marker="$X^0$", color='#400040', edgecolor='none', label='vs all zeros')
     ax.scatter([], [], s=32, marker="$X^1$", color='#400040', edgecolor='none', label='vs single')
               
-    ax.legend(fontsize=7, loc='lower right')
+    ax.legend(fontsize=6.2, loc='lower right')
     
     ax1.set_facecolor('none') # Stops covering part of text
     

@@ -13,7 +13,7 @@ from matplotlib.colors import LinearSegmentedColormap
 import lava_util as util
 import lava_plots as plots
 
-VERSION = '0.2.2'
+VERSION = '0.2.3'
 
 plots.VERSION = VERSION
 
