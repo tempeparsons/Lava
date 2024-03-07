@@ -394,23 +394,15 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     
     high_qual = (np.array(df['nobs_orig_grp1']) > 1) & (np.array(df['nobs_orig_grp2']) > 1)
     has_zeros = (np.array(df['nobs_orig_grp1']) == 0) | (np.array(df['nobs_orig_grp2']) == 0)
-    
     intensity = np.maximum(np.array(df['zmean_grp1']), np.array(df['zmean_grp2']))
-    
-    names = np.array(df.index)
+    names = np.array(df['labels'])
     
     if 'npeps' in df:
-      npeps = np.array(df['npeps'])
+        npeps = np.array(df['npeps'])
     else:
-      npeps = np.full(len(names), min_peps)
-    
-    ##pvalues = np.array(df['Tpvals'])
-    ##pvalues_q95 = np.array(df['Tpvals_q95'])
-    
-    ##nan_mask = np.isnan(pvalues)
-    ##pvalues[nan_mask] = pvalues_q95[nan_mask]
+        npeps = np.full(len(names), min_peps)
+
     pvalues = np.array(df['Tpvals_q95'])
-    
     fcvalues = np.array(df['grp1grp2_FC'])
     
     if hq_only:
@@ -487,7 +479,6 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
         ax0.axhline(pthresh, **hline_kw)
         ax1.axhline(pthresh, **hline_kw)
         ax0.annotate(p_label, (xmin, pthresh), **p_label_kw)
-
         ax0.plot([1,1], [1,0], transform=ax0.transAxes, **diag_kwargs)
         ax1.plot([0,0], [1,0], transform=ax1.transAxes, **diag_kwargs)
         

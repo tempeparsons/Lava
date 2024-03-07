@@ -36,7 +36,7 @@ DEFAULT_POS_COLOR = '#D00000'
 DEFAULT_NEG_COLOR = '#0080FF'
 DEFAULT_LOW_COLOR = '#A0A000'
 
-DEFAULT_INDEX_COLS = ('Accession','Protein.ID','Protein ID')
+DEFAULT_INDEX_COLS = ('Accession','Majority protein IDs','Protein.ID','Protein ID')
 
 LOG_FILE = None
 
@@ -191,8 +191,11 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
            cats.append(klass)
        
        fc = 2.0 ** (-lfc)
-       df.insert(1, 'fold_change', fc)
-       df.insert(1, 'hit_class', cats)
+       
+       j = list(df.columns).index('labels')
+       
+       df.insert(j+1, 'fold_change', fc)
+       df.insert(j+1, 'hit_class', cats)
        
        df.rename(columns=nmap, inplace=True)
        
@@ -263,6 +266,7 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
      return styles
      
    if file_ext in FILE_EXTS_EXL:
+       
        with pd.ExcelWriter(save_path, engine='xlsxwriter') as writer:
            
            for key in keys:
@@ -484,7 +488,7 @@ def _check_path(file_path, should_exist=True):
     
 def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table_path=None,
          idx_cols=None, ref_groups=None, markers=None, col_groups=None, min_peps=DEFAULT_MIN_PEPS, pep_col=None,
-         remove_contaminents=True,  f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP, quiet=False,
+         no_genes=False, remove_contaminents=True,  f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP, quiet=False,
          colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
          split_x=False, hit_labels=False, hq_only=False, znorm_fc=False):
     
@@ -567,6 +571,57 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         info(f'Using index column {cols.index(idx_col)+1} : "{idx_col}"')
     
     option_report.append(('Index column(s)', ' '.join(idx_cols)))
+    
+    if no_genes:
+        df['labels'] = df[idx_cols[0]]
+        option_report.append(('Label column', idx_cols[0]))
+    
+    elif 'Gene Symbol' in df:
+        df['labels'] = df['Gene Symbol']
+        option_report.append(('Label column', 'Gene Symbol'))
+    
+    elif 'Fasta headers' in df:
+        gene_names = []
+        for i, head in enumerate(df['Fasta headers']):
+            if not isinstance(head, str):
+                gene_names.append(df[idx_cols[0]][i])
+                continue
+                
+            gene_name = re.findall('GN=(\w+)', head)
+            
+            if not gene_name:
+              gene_name = re.findall('\|(\w+)\|', head)
+              
+            if gene_name:
+                gene_names.append(';'.join(sorted(set(gene_name))))
+                
+            else:
+                gene_names.append(df[idx_cols[0]][i])
+        
+        df['labels'] = gene_names
+        option_report.append(('Label column', 'Fasta GN'))
+        
+    elif 'Description' in df:
+        gene_names = []
+        
+        for i, desc in enumerate(df['Description']):
+            gene_name = []
+            match = re.search('GN=(\w+)', desc)
+            
+            if match:
+                gene_name = match.group(1)
+            else:
+                gene_name = df[idx_cols[0],i]
+                 
+            gene_names.append(gene_name)
+        
+        df['labels'] = gene_names
+        option_report.append(('Label column', 'Description GN'))
+    
+    else:
+        df['labels'] = df[idx_cols[0]]
+        option_report.append(('Label column', idx_cols[0]))
+    
     option_report.append(('Peptide column', pep_col or ''))
     option_report.append(('Min hit peptides', min_peps))
     
@@ -683,9 +738,14 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         df = df[df['First.Protein.Description'].str.contains('Keratin') == False]
  
     if remove_contaminents and software in SOFT_MQ:
-        df = df[df['Majority protein IDs'].str.startswith('CON_') == False]
-        df = df[df['Majority protein IDs'].str.startswith('REV_') == False]
-
+        if 'Majority protein IDs' in idx_cols:
+          df = df[df.index.str.startswith('CON_') == False]
+          df = df[df.index.str.startswith('REV_') == False]
+        
+        else:
+          df = df[df['Majority protein IDs'].str.startswith('CON_') == False]
+          df = df[df['Majority protein IDs'].str.startswith('REV_') == False]
+  
     if remove_contaminents and software in SOFT_PD:
         df = df[df['Description'].str.contains('Keratin') == False]
     
@@ -836,6 +896,8 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         #df = util.median_norm(df)
         
         # Add original data to output
+        df2['labels'] = orig_df['labels']
+        
         for col1 in grp1:
             df2['inA_' + col1] = orig_df[col1]
 
@@ -926,7 +988,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
 
         FZdf = pd.concat([df, Zdfs[i]], axis=1)
         
-        col_selection = ['protein_id'] if extra_id_col else []
+        col_selection = ['labels','protein_id'] if extra_id_col else ['labels']
             
         # Reorder
         col_selection += ['grp1grp2_FC', 'pvals_q95', 'Tpvals_q95', 'nobs_orig_grp1', 'nobs_orig_grp2',
@@ -1106,6 +1168,9 @@ def main(argv=None):
 
     arg_parse.add_argument('--no-labels', dest="no-labels", action='store_true',
                            help='If set, suppress the labelling of significant hits in the volcano plots')
+
+    arg_parse.add_argument('--no-genes', dest="no-genes", action='store_true',
+                           help='Suprresses the use of gene names (where availavle) in plots.')
     
     arg_parse.add_argument('-hq', '--hq-only', dest="hq-only", action='store_true',
                            help='If set, plot only the high-quality points on volcano plots. Otherwise low quality points ' \
@@ -1133,6 +1198,7 @@ def main(argv=None):
     pep_col = args['nc']
     
     split_x = args['xs']
+    no_genes = args['no-genes']
     
     pos_color = args['pos-color']
     neg_color = args['neg-color']
@@ -1182,7 +1248,7 @@ def main(argv=None):
     colors = (pos_color, low_color, neg_color)
 
     lava(in_path, exp_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns, min_peps, pep_col,
-         remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc)
+         no_genes, remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc)
 
 
 if __name__ == '__main__':
@@ -1202,6 +1268,9 @@ python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt
 python3 lava.py test/111120_IC/111120_EV_Fraction_IC.xlsx -e test/111120_IC/exptdesign.txt -g test/111120_IC/111120_IC_plotsZ01.pdf -o test/111120_IC/111120_IC_plotdataZ01.xlsx -f 6.0 -z
 
 python3 lava.py test/lakatos/Lakatos_protein_named.csv -e test/lakatos/exdes_ALSinten.txt -z -o test/lakatos/lakatos_03.xlsx -g test/lakatos/lakaos03.pdf
+
+python3 lava.py test/mq/proteinGroups_originaldata.txt -e test/mq/expd.tsv -z -o test/mq/lakatos.xlsx -g test/mq/lakaos.pdf -s MQ -nc Peptides
+python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05_znorm.pdf -nc "Number of Peptides by Search Engine CHIMERYS" -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05_znorm.xlsx -r WT -f 10 -p 0.5 
 
 """
     
