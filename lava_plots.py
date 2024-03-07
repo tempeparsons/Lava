@@ -377,15 +377,12 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
     plt.close()
 
 
-def volcano(pdf, pair_name, df, q95, FClim, pthresh, min_peps, colors=['#0080FF','#A0A000','#D00000'],
-            split_x=True, hq_only=False, hit_labels=True, markers=None,
-            lw=0.25, ls='--', lcolor='#808080', max_size=160.0, minsize=8.0,
-            label_size=5.0, show_low_pep=True, marker_text_col=None):
+def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0A000','#D00000'],
+            split_x=True, hq_only=False, hit_labels=True, markers=None, lw=0.25, ls='--', lcolor='#808080',
+            max_size=160.0, minsize=8.0, label_size=5.0, show_low_pep=True, marker_text_col=None):
     
     cmap = LinearSegmentedColormap.from_list('volc', colors[::-1])
-    
     group1, group2 = pair_name.split(':::')
-    q951, q952 = q95
     
     if not markers:
         markers = []

@@ -143,18 +143,9 @@ def _read_data(file_path):
     
 def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps):
    
-   # Rename more col headings, mark q95
-   # Colour excel table
-   
    nmap = {'grp1grp2_FC':'log2_fold_change','Tpvals_q95':'-log2_pvalue',
            'pvals_q95':'p-value', 'nobs_orig_grp1':'nobs_A', 'nobs_orig_grp2':'nobs_B', 
            }
-   ### Check
-   #nmap = {'grp1grp2_FC':'log2_fold_change', 'Tpvals':'-log2_pvalue',
-   #        'pvals':'p-value', 'Tpvals_q95':'-log2_Q95_pvalue',
-   #        'zstd_grp1_q95':'Q95_sigma_A','zstd_grp2_q95':'Q95_sigma_B',
-   #        'nobs_orig_grp1':'nobs_A', 'nobs_orig_grp2':'nobs_B', 
-   #        }
    
    quad_map = {(True,True):'POS', (True,False):'NEG', (False,True):'fail_pos', (False,False):'fail_neg', }
    
@@ -166,8 +157,6 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
    for key in keys:
        df = plotdict[key]
        lfc = np.array(df['grp1grp2_FC'])
-       ### Check
-       #pvs = np.array(df['Tpvals'])
        pvs = np.array(df['Tpvals_q95'])
        n = len(lfc)
        
@@ -201,13 +190,9 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
            cat_colors.append(color)
            cats.append(klass)
        
-         
-       
        fc = 2.0 ** (-lfc)
        df.insert(1, 'fold_change', fc)
        df.insert(1, 'hit_class', cats)
-       ###
-       #df.sort_values(by=['pvals',], ascending=True, inplace=True)
        
        df.rename(columns=nmap, inplace=True)
        
@@ -222,7 +207,6 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
        color_dict[key] = [cat_colors[i] for i in sort_idx]
        plotdict[key] = df.iloc[sort_idx]
        
-       #df.sort_values(by=['pvals_q95',], ascending=True, inplace=True)
     
    def grp1_col_bg(vals):
    
@@ -713,7 +697,6 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     
     if pep_col and min_peps > 1:
        n1 = df.shape[0]
-       #df = df[df[pep_col] >= min_peps]
        nlow = np.count_nonzero(df[pep_col] < min_peps)
        info(f'Found {nlow} low peptide (<{min_peps}) rows from {n1,} total')
        option_report.append((f'Low peptide rows', nlow))
@@ -855,16 +838,10 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         # Add original data to output
         for col1 in grp1:
             df2['inA_' + col1] = orig_df[col1]
-            
-            #if pep_count_cols:
-            #   df2['npepA_' + col1] = orig_df[pep_count_cols[col1]]
 
         for col2 in grp2:
             df2['inB_' + col2] = orig_df[col2]
-            
-            #if pep_count_cols:
-            #   df2['npepB_' + col2] = orig_df[pep_count_cols[col2]]
-        
+         
         if extra_id_col:
             df2['protein_id'] = orig_df[extra_id_col]
         
@@ -876,8 +853,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         df2['nobs_grp1'] = df2.loc[:,grp1].count(axis=1)
         df2['nobs_grp2'] = df2.loc[:,grp2].count(axis=1)
         df2 = util.remove_rows(df2, len(grp1), len(grp2))
-        #df2 = df2.drop(columns = ['nobs_grp1', 'nobs_grp2']) # now added to output
-
+ 
         df2['mean_grp1'] = df2.loc[:,grp1].mean(axis=1)
         df2['mean_grp2'] = df2.loc[:,grp2].mean(axis=1)
         
@@ -940,10 +916,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         
         df = util.ttest_from_stats_eqvar(df)
         df = df.drop(columns = grp1 + grp2)
-        
-        q95 = (q95grp1, q95grp2)
-        q95s.append(q95)
- 
+
         Zdfs.append(df)
 
     FZdfs = []
@@ -961,22 +934,14 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         
         if pep_col:
             col_selection.append('npeps')
-            
-        ### Check
-        #col_selection += ['grp1grp2_FC', 'pvals', 'nobs_orig_grp1', 'nobs_orig_grp2', 'Tpvals',
-        #                  'Tpvals_q95', 'zstd_grp1_q95', 'zstd_grp2_q95', 'zmean_grp2',
-        #                  'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
-        
+         
         # Orig data last
         col_selection += [c for c in df.columns if c.startswith('inA_')]
         col_selection += [c for c in df.columns if c.startswith('inB_')]
-        #col_selection += [c for c in df.columns if c.startswith('npepA_')]
-        #col_selection += [c for c in df.columns if c.startswith('npepB_')]
-        
+         
         FZdfs.append(FZdf[col_selection])
  
     plotdict = dict(zip(dfnames, FZdfs))
-    q95dict = dict(zip(dfnames, q95s))
 
     ##review that you're about the plot the expected pairs
     ##review what percentage of proteins will be higher-lower than the positive-negative fold change limits
@@ -1027,17 +992,8 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         plt.show()
         """
 
-        plots.volcano(pdf, pair_name, plotdict[pair_name], q95dict[pair_name], f_thresh, p_thresh, min_peps,
+        plots.volcano(pdf, pair_name, plotdict[pair_name], f_thresh, p_thresh, min_peps,
                       colors, split_x, hq_only, hit_labels, markers, lw=0.25, ls='--', marker_text_col=None)
-        
-        """
-        if pep_count_cols:
-            #npep_cols = [x for x in df.columns if x.startswith('npep')]
-            #marker_text_col = 'max_pep'
-            #df[marker_text_col] = df[npep_cols].max(axis=1).astype(int)
-            plots.volcano(pdf, pair_name, plotdict[pair_name], q95dict[pair_name], f_thresh, p_thresh, colors,
-                          split_x, hq_only, hit_labels=True, markers=None, lw=0.25, ls='--', marker_text_col='npeps')
-        """
         
     if table_path:
         save_volcano_table(pairs, plotdict, table_path, f_thresh, p_thresh, min_peps)
@@ -1083,7 +1039,7 @@ def main(argv=None):
     arg_parse.add_argument('-i', '--index-columns', dest="i", metavar='INDEX_COLUMN', default=None,
                            help=f'The names, or numbers starting from 1, of one or more input columns used to uniquely index the data rows. If not specified, column names will be sought from the default list: {default_idx}.')
 
-    arg_parse.add_argument('-n', '--min-peps', dest="n", metavar='PEP_COUNT_COLUMN', default=DEFAULT_MIN_PEPS,
+    arg_parse.add_argument('-n', '--min-peps', dest="n", metavar='PEP_COUNT_COLUMN', default=DEFAULT_MIN_PEPS, type=int, 
                            help=f'The minimum number of theoretical peptides required for a protein to be considered as a hit. '\
                                   'No selection will be done unless the peptide column is specified via the -nc option.'\
                                   'Proteins that fail will be reported separately.')
@@ -1245,6 +1201,7 @@ python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt
 
 python3 lava.py test/111120_IC/111120_EV_Fraction_IC.xlsx -e test/111120_IC/exptdesign.txt -g test/111120_IC/111120_IC_plotsZ01.pdf -o test/111120_IC/111120_IC_plotdataZ01.xlsx -f 6.0 -z
 
+python3 lava.py test/lakatos/Lakatos_protein_named.csv -e test/lakatos/exdes_ALSinten.txt -z -o test/lakatos/lakatos_03.xlsx -g test/lakatos/lakaos03.pdf
 
 """
     
