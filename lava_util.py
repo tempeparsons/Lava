@@ -40,12 +40,12 @@ def remove_rows(df, grpsize1, grpsize2):
     df = df.drop(df[(df.iloc[:,-1] == 0) & (df.iloc[:,-2] < max(grpsize2-1, 3))].index)
     
     # Any pure zeros are real zeros not NaN
-    df.loc[df[cols[-2]] == 0, cols[:grpsize1]] = [0] * grpsize1
-    df.loc[df[cols[-1]] == 0, cols[grpsize1:grpsize1+grpsize2]] = [0] * grpsize2
+    #df.loc[df[cols[-2]] == 0, cols[:grpsize1]] = [0] * grpsize1
+    #df.loc[df[cols[-1]] == 0, cols[grpsize1:grpsize1+grpsize2]] = [0] * grpsize2
     
     # Any singlular dat has nobs set to 2 for t-test
-    df.loc[df[cols[-2]] == 1, cols[-2]] = 2 # Nobs for t-test
-    df.loc[df[cols[-1]] == 1, cols[-1]] = 2
+    #df.loc[df[cols[-2]] == 1, cols[-2]] = 2 # Nobs for t-test
+    #df.loc[df[cols[-1]] == 1, cols[-1]] = 2
     
     return df
     
@@ -62,9 +62,41 @@ def prpn_log2FCs_over_threshold(df, thresh_int):
     neg_pct = "{:.2f}".format(prpn_neg)
     return pos_pct, neg_pct
 
+from matplotlib import pyplot as plt
+
+def make_znorm(df, cols1, cols2):
+    
+    meds = []
+    stds = []
+    zcols = [[], []]
+    
+    for i, cols in enumerate([cols1, cols2]):
+        for col in cols:
+            vals = np.array(df[col])
+            nz = vals > 0
+            nz_vals = vals[nz] # No zeros or nans
+            meds.append(np.median(nz_vals))
+            std = nz_vals.std(ddof=0)
+            stds.append(std)
+            zcol ='znorm_' + col
+            zcols[i].append(zcol)
+            vals[nz] = (vals[nz] - nz_vals.mean())/std
+            df[zcol] = vals
+ 
+    med_med = np.median(meds)
+    med_std = np.median(stds)
+    
+    zcols1, zcols2 = zcols
+
+    df[zcols1] *= med_std
+    df[zcols2] *= med_std 
+    df[zcols1] += med_med
+    df[zcols2] += med_med
+      
+    return zcols1, zcols2
 
 
-def make_znorm(df):
+def old_make_znorm(df):
     
     valuecols = df.columns.to_list()
     meds = []
@@ -94,11 +126,11 @@ def ttest_from_stats_eqvar(df):
     df['pvals'] = tt_res[1].tolist() #to_list
     df['Tpvals'] = -1*np.log2(tt_res[1].tolist()) #to_list
 
-    tt_res = ttest_ind_from_stats(mean1 = df['zmean_grp1'], std1 = df['zstd_grp1_q95'], nobs1 = df['znobs_grp1_q95'], 
-                                  mean2 = df['zmean_grp2'], std2 = df['zstd_grp2_q95'], nobs2 = df['znobs_grp2_q95'], 
-                                  equal_var=True)
-    df['pvals_q95'] = tt_res[1].tolist() #to_list
-    df['Tpvals_q95'] = -1*np.log2(tt_res[1].tolist()) #to_list
+    #tt_res = ttest_ind_from_stats(mean1 = df['zmean_grp1'], std1 = df['zstd_grp1_q95'], nobs1 = df['znobs_grp1_q95'], 
+    #                              mean2 = df['zmean_grp2'], std2 = df['zstd_grp2_q95'], nobs2 = df['znobs_grp2_q95'], 
+    #                              equal_var=True)
+    #df['pvals_q95'] = tt_res[1].tolist() #to_list
+    #df['Tpvals_q95'] = -1*np.log2(tt_res[1].tolist()) #to_list
     return df
     
     

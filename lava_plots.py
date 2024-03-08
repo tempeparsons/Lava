@@ -182,7 +182,7 @@ def xy_plots(df, value_cols, ncols, pdf, colors=['#0080FF','#A0A000','#FF0000'],
     data[~(data > 0)] =  np.nanmean(data) # Zeros and nans
     corr_mat = distance.pdist(data, metric='correlation') # Correlation 'distance" : 1.0 - rho
     linkage = hierarchy.ward(corr_mat)
-    order = hierarchy.leaves_list(linkage)[::-1]
+    order = hierarchy.leaves_list(linkage)
     
     corr_mat = 1.0 - distance.squareform(distance.pdist(data, metric='correlation'))
     min_corr = corr_mat.min()
@@ -263,11 +263,11 @@ def correlation_plot(df, value_cols, pdf, colors=['#0080FF','#A0A000','#D00000']
     corr_mat = distance.pdist(data, metric='correlation') # Correlation 'distance" : 1.0 - rho
     
     linkage = hierarchy.ward(corr_mat)
-    order = hierarchy.leaves_list(linkage)[::-1]
+    order = hierarchy.leaves_list(linkage)
     
     corr_mat = 1.0 - distance.squareform(corr_mat)
     sort_cols = [cols[j] for j in order]
-    corr_mat = corr_mat[order][:,order[::-1]]
+    corr_mat = corr_mat[order[::-1]][:,order]
      
     n, m = corr_mat.shape
     
@@ -328,8 +328,8 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
          ax0 = axs[row, 0]
          ax1 = axs[row, 1]
          
-         pvals = df['pvals_q95'].to_list()
-         FCs = df['grp1grp2_FC'].to_list()
+         pvals = np.array(df['pvals'])
+         FCs = np.array(df['grp1grp2_FC'])
          
          if row == 0:
              ax0.set_title(f'P-value distrbutions', color=c0)    
@@ -392,8 +392,8 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     
     marker_texts = df[marker_text_col] if marker_text_col else None
     
-    high_qual = (np.array(df['nobs_orig_grp1']) > 1) & (np.array(df['nobs_orig_grp2']) > 1)
-    has_zeros = (np.array(df['nobs_orig_grp1']) == 0) | (np.array(df['nobs_orig_grp2']) == 0)
+    high_qual = (np.array(df['nobs_grp1']) > 1) & (np.array(df['nobs_grp2']) > 1)
+    has_zeros = (np.array(df['nobs_grp1']) == 0) | (np.array(df['nobs_grp2']) == 0)
     intensity = np.maximum(np.array(df['zmean_grp1']), np.array(df['zmean_grp2']))
     names = np.array(df['labels'])
     
@@ -402,7 +402,7 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     else:
         npeps = np.full(len(names), min_peps)
 
-    pvalues = np.array(df['Tpvals_q95'])
+    pvalues = np.array(df['Tpvals'])
     fcvalues = np.array(df['grp1grp2_FC'])
     
     if hq_only:
@@ -541,8 +541,13 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     weights /= np.abs(weights).max()
     weights = (1.0 + weights) / 2.0 # 0..1
     
+    #intensity = np.argsort(intensity).astype(float)
     intensity -= intensity.min()
-    intensity /= intensity.max() # 0..1
+    intensity /= intensity.max()
+
+    #plt.hist(intensity, bins=100)
+    #plt.show()
+
     intensity **= 2.0
     
     sizes = min_size + (max_size-min_size) * intensity # min_size .. max_size

@@ -13,7 +13,7 @@ from matplotlib.colors import LinearSegmentedColormap
 import lava_util as util
 import lava_plots as plots
 
-VERSION = '0.2.3'
+VERSION = '0.2.4'
 
 plots.VERSION = VERSION
 
@@ -143,8 +143,11 @@ def _read_data(file_path):
     
 def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps):
    
-   nmap = {'grp1grp2_FC':'log2_fold_change','Tpvals_q95':'-log2_pvalue',
-           'pvals_q95':'p-value', 'nobs_orig_grp1':'nobs_A', 'nobs_orig_grp2':'nobs_B', 
+   nmap = {'grp1grp2_FC':'log2_fold_change','Tpvals':'-log2_pvalue',
+           'pvals':'p-value', 'nobs_grp1':'nobs_A', 'nobs_grp2':'nobs_B',
+           'mean_grp1' : 'log2mean_A', 'mean_grp2': 'log2mean_B',
+           'zmean_grp1': 'zmean_A', 'zmean_grp2': 'zmean_B',
+           'zstd_grp1': 'zstd_A',  'zstd_grp2': 'zstd_B',           
            }
    
    quad_map = {(True,True):'POS', (True,False):'NEG', (False,True):'fail_pos', (False,False):'fail_neg', }
@@ -157,7 +160,7 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
    for key in keys:
        df = plotdict[key]
        lfc = np.array(df['grp1grp2_FC'])
-       pvs = np.array(df['Tpvals_q95'])
+       pvs = np.array(df['Tpvals'])
        n = len(lfc)
        
        if 'npeps' in df:
@@ -326,7 +329,6 @@ def _read_exp_file(df, file_path):
     
     group_dicts = []
     col_rename = None
-    pep_count_cols = {}
     
     with open(file_path, newline='') as file_obj:
         for row in csv.reader(file_obj, delimiter=delimiter):
@@ -346,15 +348,6 @@ def _read_exp_file(df, file_path):
             
             col_name, *groups = row
             col_name = col_name.strip()
-            
-            if ':' in col_name:
-              col_name, count_col_name = col_name.split(':')
-              
-              if count_col_name not in df:
-                fail(f'Peptide count column named {count_col_name} is not present in input data')
-              
-              pep_count_cols[col_name] = count_col_name
-              
             if col_name not in df:
               fail(f'Sample column named {col_name} is not present in input data')
             
@@ -373,9 +366,6 @@ def _read_exp_file(df, file_path):
                  
                  for orig in sorted(col_rename):
                      info(f'  from "{orig}" to "{col_rename[orig]}"')
-                     if pep_count_cols:
-                       pep_count_cols[col_rename[orig]] = pep_count_cols[orig]
-                       del pep_count_cols[orig]
                  
                  renamed_group_dicts = []
                  for j, group_dict in enumerate(group_dicts):
@@ -395,7 +385,7 @@ def _read_exp_file(df, file_path):
     else:
         fail(f'Experimental design file {file_path} did not appear to contain anything useful')
     
-    return group_dicts, pep_count_cols # a list of {group_nameA:[col_name1, col_name2], group_nameB:[col_name3, col_name4],}
+    return group_dicts # a list of {group_nameA:[col_name1, col_name2], group_nameB:[col_name3, col_name4],}
     
       
 def _split_col_groups(df, group_spec):
@@ -525,10 +515,9 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     cols = list(df.columns)
     n_cols = len(cols)
     group_dicts = None
-    pep_count_cols = None
     
     if exp_path:  # Read from exp design file if possible
-        group_dicts, pep_count_cols = _read_exp_file(df, exp_path)
+        group_dicts = _read_exp_file(df, exp_path)
    
     elif col_groups:
         group_dicts = _split_col_groups(df, col_groups)
@@ -611,7 +600,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
             if match:
                 gene_name = match.group(1)
             else:
-                gene_name = df[idx_cols[0],i]
+                gene_name = df[idx_cols[0]][i]
                  
             gene_names.append(gene_name)
         
@@ -719,19 +708,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
                     info(f'   {g1}  -  {g2}')
                     pairs.append((g1, g2))
                     option_report.append((f'Pair {len(pairs)}', f'{g1}  vs  {g2}'))
-     
-    
-    """ 
-    if pep_count_cols:
-        info(f'Using peptide count columns:')
-        rep_text = []
-        for col in sorted(pep_count_cols):
-           info(f'   {col}  :  {pep_count_cols[col]}')
-           rep_text.append(f'{col} : {pep_count_cols[col]}')
-           
-        option_report.append(('Pep. count cols', ','.join(rep_text)))
-    """
-         
+
     pre_cull = df.shape
     
     if remove_contaminents and software in SOFT_DN:
@@ -871,31 +848,17 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     info('Plotting comparisons')
     plots.xy_plots(df, value_cols, ncols, pdf)
     
-    
-    FCdict = {}
-    Zdict = {}
-
-    dftest = []
-    for g1, g2 in pairs:
-        cols1 = group_cols[g1]
-        cols2 = group_cols[g2]
-        df2 = df[cols1+cols2].copy()
-        
-        key = f'{g1}:::{g2}'
-        FCdict[key] = [df2, cols1, cols2]
-        Zdict[key]  = [df2.copy(), cols1, cols2]
- 
- 
+    plotdict = {}
     overFCthresh = {}
-    dfnames = []
-    FCdfs = []
-    for k, (df2, cols1, cols2) in FCdict.items():
 
-        grp1 = [c for c in df2.columns if c in cols1]
-        grp2 = [c for c in df2.columns if c in cols2]
-        #df = util.median_norm(df)
+    info(f'Using log2 fold-change threshold: {f_thresh}')
+    for g1, g2 in pairs:
+        key = f'{g1}:::{g2}'
+        grp1 = group_cols[g1]
+        grp2 = group_cols[g2]
+        df2 = df[grp1+grp2].copy()
         
-        # Add original data to output
+        # Add labels and original, untransformed data to output
         df2['labels'] = orig_df['labels']
         
         for col1 in grp1:
@@ -903,121 +866,106 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
 
         for col2 in grp2:
             df2['inB_' + col2] = orig_df[col2]
-         
+        
         if extra_id_col:
             df2['protein_id'] = orig_df[extra_id_col]
         
         if pep_col:
             df2['npeps'] = orig_df[pep_col]
         
-        df2['nobs_orig_grp1'] = df2.loc[:,grp1].count(axis=1)
-        df2['nobs_orig_grp2'] = df2.loc[:,grp2].count(axis=1)
+        # Count non-Nan observations
         df2['nobs_grp1'] = df2.loc[:,grp1].count(axis=1)
         df2['nobs_grp2'] = df2.loc[:,grp2].count(axis=1)
-        df2 = util.remove_rows(df2, len(grp1), len(grp2))
- 
+        
+        # Remove rows , for this sample pair, with insuffcicient data
+        df2 = util.remove_rows(df2, len(grp1), len(grp2)) # Now only removes rows doesn't change zeros
+       
+        # Z normalise value distributions; used in T-test and optionally for fold-change
+        zgrp1, zgrp2 = util.make_znorm(df2, grp1, grp2) # Now keeps original cols
+        
+        # Identify single and all-zero rows before any modifications, zero-filling etc.
+        azeros1 = df2['nobs_grp1'] == 0
+        azeros2 = df2['nobs_grp2'] == 0
+        singles1 = df2['nobs_grp1'] == 1
+        singles2 = df2['nobs_grp2'] == 1
+        
+        
+        # Any pure zeros are real zeros not NaN; set before taking means
+        df2.loc[azeros1, grp1] = 0
+        df2.loc[azeros2, grp2] = 0
+        df2.loc[azeros1, zgrp1] = 0
+        df2.loc[azeros2, zgrp2] = 0
+        
+        # Any singlular data has nobs set to 2 for t-test
+        
+        # Means ignoring sparse NaNs
         df2['mean_grp1'] = df2.loc[:,grp1].mean(axis=1)
         df2['mean_grp2'] = df2.loc[:,grp2].mean(axis=1)
+        df2['zmean_grp1'] = df2.loc[:,zgrp1].mean(axis=1)
+        df2['zmean_grp2'] = df2.loc[:,zgrp2].mean(axis=1)
         
-        # Clip zeros
-        mu1 = np.array(df2['mean_grp1'])
-        mu2 = np.array(df2['mean_grp2'])
-        mu1 = mu1[mu1>0]
-        mu2 = mu2[mu2>0]
-        df2['mean_grp1'] = np.where(df2['mean_grp1'] == 0, mu1.min(), df2['mean_grp1'])
-        df2['mean_grp2'] = np.where(df2['mean_grp2'] == 0, mu2.min(), df2['mean_grp2'])
+        # Get minimum non-zero/non-nan means; these are used to replace zeros for FC calc
+        min_mu1 = np.array(df2['mean_grp1'])[~azeros1].min()
+        min_mu2 = np.array(df2['mean_grp2'])[~azeros2].min()
+        min_zmu1 = np.array(df2['zmean_grp1'])[~azeros1].min()
+        min_zmu2 = np.array(df2['zmean_grp1'])[~azeros2].min()
+        
+        # Replace all-zero means with a lower bound
+        df2['mean_grp1'] = np.where(azeros1, min_mu1, df2['mean_grp1'])
+        df2['mean_grp2'] = np.where(azeros2, min_mu2, df2['mean_grp2'])
+        df2['zmean_grp1'] = np.where(azeros1, min_zmu1, df2['zmean_grp1'])
+        df2['zmean_grp2'] = np.where(azeros2, min_zmu2, df2['zmean_grp2'])
+        
+        # Calc fold changes
+        if znorm_fc:
+            df2['grp1grp2_FC'] = df2['zmean_grp1'] - df2['zmean_grp2']
+        else:
+            df2['grp1grp2_FC'] = df2['mean_grp1'] - df2['mean_grp2']          
+        
+        # Get Z-normed params for T-test 
+        df2['zstd_grp1'] = df2.loc[:,zgrp1].std(axis=1, ddof=1)
+        df2['zstd_grp2'] = df2.loc[:,zgrp2].std(axis=1, ddof=1)
+        df2['znobs_grp1'] = df2.loc[:,zgrp1].count(axis=1) # Counts clipped zeros
+        df2['znobs_grp2'] = df2.loc[:,zgrp2].count(axis=1)
+        
+        #q95grp1 = df2.zstd_grp1.quantile(q=0.95)
+        #q95grp2 = df2.zstd_grp2.quantile(q=0.95)
          
-        df2['grp1grp2_FC'] = df2['mean_grp1'] - df2['mean_grp2']
-       
-        FCdfs.append(df2)
-        dfnames.append(k)
- 
-        p, n = util.prpn_log2FCs_over_threshold(df2, f_thresh)
-        overFCthresh[k] = (p, n)
-
-    Zdfs = []
-    q95s = []
-    for k, (df, cols1, cols2) in Zdict.items():
-        grp1 = [c for c in df.columns if c in cols1]
-        grp2 = [c for c in df.columns if c in cols2]
- 
-        df = util.make_znorm(df)
-        df['nobs_grp1'] = df.loc[:,grp1].count(axis=1)
-        df['nobs_grp2'] = df.loc[:,grp2].count(axis=1)
-        df = util.remove_rows(df, len(grp1), len(grp2))
-        df = df.drop(columns = ['nobs_grp1', 'nobs_grp2'])
- 
-        df['zmean_grp1'] = df.loc[:,grp1].mean(axis=1)
-        df['zstd_grp1'] = df.loc[:,grp1].std(axis=1, ddof=1)
+        # Current heristic is to average the other side with a quantile STD replacement
+        zstds1 = 0.5 * (df2.zstd_grp1.quantile(q=0.75) + df2['zstd_grp2'])
+        zstds2 = 0.5 * (df2.zstd_grp2.quantile(q=0.75) + df2['zstd_grp1'])
         
-        q95grp1 = df.zstd_grp1.quantile(q=0.95)
-        df['zstd_grp1_q95'] = df['zstd_grp1'].fillna(q95grp1)
-        df['znobs_grp1'] = df.loc[:,grp1].count(axis=1)
-        df['znobs_grp1_q95'] = np.where(df['znobs_grp1'] == 1, 2, df['znobs_grp1'])
-        df['zmean_grp2'] = df.loc[:,grp2].mean(axis=1)
-        df['zstd_grp2'] = df.loc[:,grp2].std(axis=1, ddof=1)
-        
-        q95grp2 = df.zstd_grp2.quantile(q=0.95)
-        df['zstd_grp2_q95'] = df['zstd_grp2'].fillna(q95grp2)
-        df['znobs_grp2'] = df.loc[:,grp2].count(axis=1)
-        df['znobs_grp2_q95'] = np.where(df['znobs_grp2'] == 1, 2, df['znobs_grp2'])
+        # Set replacement std fro all-zeros and singlular
+        df2['zstd_grp1'] = np.where(azeros1, zstds1, df2['zstd_grp1'])
+        df2['zstd_grp2'] = np.where(azeros2, zstds2, df2['zstd_grp2'])
+        df2['zstd_grp1'] = np.where(singles1, zstds1, df2['zstd_grp1'])
+        df2['zstd_grp2'] = np.where(singles2, zstds2, df2['zstd_grp2'])
 
-        if znorm_fc:
-            # Clip zeros
-            mu1 = np.array(df['zmean_grp1'])
-            mu2 = np.array(df['zmean_grp2'])
-            mu1 = mu1[mu1>0]
-            mu2 = mu2[mu2>0]
-            df['zmean_grp1'] = np.where(df['zmean_grp1'] == 0, mu1.min(), df['zmean_grp1'])
-            df['zmean_grp2'] = np.where(df['zmean_grp2'] == 0, mu2.min(), df['zmean_grp2'])
-            df['grp1grp2_FC'] = df['zmean_grp1'] - df['zmean_grp2']
+        # Singlular counts are artificially set to 2 and STD to q95 for T-test
+        df2.loc[singles1, 'znobs_grp1'] = 2
+        df2.loc[singles2, 'znobs_grp2'] = 2
+                
+        pos, neg = util.prpn_log2FCs_over_threshold(df2, f_thresh)
+        info(f'  - pair {g1} vs {g2} proteins over theshold: pos; {pos}% neg; {neg}%')
         
-        # For zeros use std of other group
-        df['zstd_grp1'] = np.where(df['zstd_grp1'] == 0, df['zstd_grp2'], df['zstd_grp1'])
-        df['zstd_grp2'] = np.where(df['zstd_grp2'] == 0, df['zstd_grp1'], df['zstd_grp2'])
+        df2 = util.ttest_from_stats_eqvar(df2)
+        df2 = df2.drop(columns = zgrp1 + zgrp2 + grp1 + grp2)
         
-        df = util.ttest_from_stats_eqvar(df)
-        df = df.drop(columns = grp1 + grp2)
-
-        Zdfs.append(df)
-
-    FZdfs = []
-    for i, df in enumerate(FCdfs):
-        if znorm_fc:
-            df = df.drop(columns = ['grp1grp2_FC']) # Avoid diplicate
-
-        FZdf = pd.concat([df, Zdfs[i]], axis=1)
-        
-        col_selection = ['labels','protein_id'] if extra_id_col else ['labels']
+        col_selection = ['protein_id','labels'] if extra_id_col else ['labels']
             
         # Reorder
-        col_selection += ['grp1grp2_FC', 'pvals_q95', 'Tpvals_q95', 'nobs_orig_grp1', 'nobs_orig_grp2',
-                          'zmean_grp2', 'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
+        col_selection += ['grp1grp2_FC', 'pvals', 'Tpvals', 'nobs_grp1', 'nobs_grp2',
+                          'mean_grp2', 'mean_grp1', 'zmean_grp2', 'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
         
         if pep_col:
             col_selection.append('npeps')
          
         # Orig data last
-        col_selection += [c for c in df.columns if c.startswith('inA_')]
-        col_selection += [c for c in df.columns if c.startswith('inB_')]
+        col_selection += [c for c in df2.columns if c.startswith('inA_')]
+        col_selection += [c for c in df2.columns if c.startswith('inB_')]
          
-        FZdfs.append(FZdf[col_selection])
- 
-    plotdict = dict(zip(dfnames, FZdfs))
+        plotdict[key] = df2[col_selection]
 
-    ##review that you're about the plot the expected pairs
-    ##review what percentage of proteins will be higher-lower than the positive-negative fold change limits
-
-    info(f'Using log2 fold-change threshold: {f_thresh}')
-    for k, (pos, neg) in overFCthresh.items():
-        info(f'  - pair {k} proteins over theshold: pos; {pos}% neg; {neg}%')
-
-    # if you got too high or low a %age of proteins over the FC threshold, type your new number instead of 'same'
-    # to keep it the same, just leave it as is.
-
-    # now examine the distrbutions of p-values and fold changes for all your pairs.
-    # the majority of fold changes should be normally distrbuted around zero
-    # the distrbution of p-values will depend on your experiment
 
     plots.pvalFC_hists(plotdict, pdf)
 
@@ -1262,7 +1210,6 @@ python3 lava.py VolcCLI_PD1.xlsx -o VolcCLI_PD1_out.xlsx -g VolcCLI_PD1.pdf -e g
 python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava01.pdf -o test/Nadine_LVA/Nadine_LVA_lava.xlsx -r CNT -f 10 -p 0.5 -i "Gene Symbol"
 python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava03.pdf -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava.xlsx -r WT -f 10 -p 0.5 -i "Gene Symbol"
 
-python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava02_znorm.pdf -z -o test/Nadine_LVA/Nadine_LVA_lava02_znorm.xlsx -r CNT -f 10 -p 5 -i "Gene Symbol"
 python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05_znorm.pdf -nc "Number of Peptides by Search Engine CHIMERYS" -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05_znorm.xlsx -r WT -f 10 -p 0.5 -i "Gene Symbol"
 
 python3 lava.py test/111120_IC/111120_EV_Fraction_IC.xlsx -e test/111120_IC/exptdesign.txt -g test/111120_IC/111120_IC_plotsZ01.pdf -o test/111120_IC/111120_IC_plotdataZ01.xlsx -f 6.0 -z
@@ -1270,7 +1217,8 @@ python3 lava.py test/111120_IC/111120_EV_Fraction_IC.xlsx -e test/111120_IC/expt
 python3 lava.py test/lakatos/Lakatos_protein_named.csv -e test/lakatos/exdes_ALSinten.txt -z -o test/lakatos/lakatos_03.xlsx -g test/lakatos/lakaos03.pdf
 
 python3 lava.py test/mq/proteinGroups_originaldata.txt -e test/mq/expd.tsv -z -o test/mq/lakatos.xlsx -g test/mq/lakaos.pdf -s MQ -nc Peptides
-python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05_znorm.pdf -nc "Number of Peptides by Search Engine CHIMERYS" -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05_znorm.xlsx -r WT -f 10 -p 0.5 
+python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05b_znorm.pdf -nc "Number of Peptides by Search Engine CHIMERYS" -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05b_znorm.xlsx -r WT -f 10 -p 0.5 
+python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava03_znorm.pdf -z -o test/Nadine_LVA/Nadine_LVA_lava03_znorm.xlsx -r CNT -f 10 -p 5 -nc "Number of Peptides by Search Engine CHIMERYS"
 
 """
     
