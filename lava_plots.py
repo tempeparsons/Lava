@@ -378,8 +378,8 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
 
 
 def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0A000','#D00000'],
-            split_x=True, hq_only=False, hit_labels=True, markers=None, lw=0.25, ls='--', lcolor='#808080',
-            max_size=160.0, min_size=8.0, label_size=5.0, show_low_pep=True, marker_text_col=None):
+            quant_scale=False, split_x=True, hq_only=False, hit_labels=True, markers=None, lw=0.25,
+            ls='--', lcolor='#808080', max_size=160.0, min_size=8.0, label_size=5.0, show_low_pep=True, marker_text_col=None):
     
     cmap = LinearSegmentedColormap.from_list('volc', colors[::-1])
     group1, group2 = pair_name.split(':::')
@@ -541,8 +541,11 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     weights /= np.abs(weights).max()
     weights = (1.0 + weights) / 2.0 # 0..1
     
-    #intensity = np.argsort(intensity).astype(float)
-    intensity -= intensity.min()
+    if quant_scale:
+        intensity = np.argsort(intensity).astype(float)
+    else:
+       intensity -= intensity.min()
+       
     intensity /= intensity.max()
 
     #plt.hist(intensity, bins=100)

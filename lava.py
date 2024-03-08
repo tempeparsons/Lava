@@ -480,7 +480,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
          idx_cols=None, ref_groups=None, markers=None, col_groups=None, min_peps=DEFAULT_MIN_PEPS, pep_col=None,
          no_genes=False, remove_contaminents=True,  f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP, quiet=False,
          colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
-         split_x=False, hit_labels=False, hq_only=False, znorm_fc=False):
+         split_x=False, hit_labels=False, hq_only=False, znorm_fc=False, quant_scale=False):
     
     in_path = _check_path(in_path, should_exist=True)
     exp_path = _check_path(exp_path, should_exist=True)
@@ -508,6 +508,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
                      ('Show hit labels',hit_labels),
                      ('Show high quality',hq_only),
                      ('Z-norm fold-changes',znorm_fc),
+                     ('Quantile spot size',quant_scale),
                      ]
         
     color_pos, color_neg, color_low =   colors
@@ -1003,7 +1004,8 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         """
 
         plots.volcano(pdf, pair_name, plotdict[pair_name], f_thresh, p_thresh, min_peps,
-                      colors, split_x, hq_only, hit_labels, markers, lw=0.25, ls='--', marker_text_col=None)
+                      colors, quant_scale, split_x, hq_only, hit_labels, markers, lw=0.25, ls='--',
+                      marker_text_col=None)
         
     if table_path:
         save_volcano_table(pairs, plotdict, table_path, f_thresh, p_thresh, min_peps)
@@ -1088,6 +1090,9 @@ def main(argv=None):
     arg_parse.add_argument('-z', '--z-norm-fc', dest="z", action='store_true',
                            help=f"When set, fold changes will be calculated from Z-normalised values.")
 
+    arg_parse.add_argument('-qs', '--quantile-scaling', dest="qs", action='store_true',
+                           help='Use quantile scaling of abundance to determine spot size in the volcno plots, otherwise the (maximum) mean abundance is used directly.')
+                           
     arg_parse.add_argument('-l', '--log-status', dest="l", action='store_true',
                            help=f"When set, writes status information to a log file; the log file path will be based on the input path.")
     
@@ -1144,6 +1149,7 @@ def main(argv=None):
     znorm_fc = args['z']
     min_peps = args['n']
     pep_col = args['nc']
+    quant_scale = args['qs']
     
     split_x = args['xs']
     no_genes = args['no-genes']
@@ -1196,7 +1202,7 @@ def main(argv=None):
     colors = (pos_color, low_color, neg_color)
 
     lava(in_path, exp_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns, min_peps, pep_col,
-         no_genes, remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc)
+         no_genes, remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc, quant_scale)
 
 
 if __name__ == '__main__':
@@ -1216,9 +1222,9 @@ python3 lava.py test/111120_IC/111120_EV_Fraction_IC.xlsx -e test/111120_IC/expt
 
 python3 lava.py test/lakatos/Lakatos_protein_named.csv -e test/lakatos/exdes_ALSinten.txt -z -o test/lakatos/lakatos_03.xlsx -g test/lakatos/lakaos03.pdf
 
-python3 lava.py test/mq/proteinGroups_originaldata.txt -e test/mq/expd.tsv -z -o test/mq/lakatos.xlsx -g test/mq/lakaos.pdf -s MQ -nc Peptides
+python3 lava.py test/mq/proteinGroups_originaldata.txt -e test/mq/expd.tsv -z -o test/mq/lakatos_01.xlsx -g test/mq/lakaos_01.pdf -s MQ -nc Peptides
 python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05b_znorm.pdf -nc "Number of Peptides by Search Engine CHIMERYS" -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05b_znorm.xlsx -r WT -f 10 -p 0.5 
-python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava03_znorm.pdf -z -o test/Nadine_LVA/Nadine_LVA_lava03_znorm.xlsx -r CNT -f 10 -p 5 -nc "Number of Peptides by Search Engine CHIMERYS"
+python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava04_znorm.pdf -z -o test/Nadine_LVA/Nadine_LVA_lava04_znorm.xlsx -r CNT -f 10 -p 5 -nc "Number of Peptides by Search Engine CHIMERYS"
 
 """
     
