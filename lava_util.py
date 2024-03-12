@@ -64,7 +64,34 @@ def prpn_log2FCs_over_threshold(df, thresh_int):
 
 from matplotlib import pyplot as plt
 
-def make_znorm(df, cols1, cols2):
+def make_znorm(df, cols):
+    
+    meds = []
+    stds = []
+    zcols = []
+    
+    for col in cols:
+        vals = np.array(df[col])
+        nz = vals > 0
+        nz_vals = vals[nz] # No zeros or nans
+        meds.append(np.median(nz_vals))
+        std = nz_vals.std(ddof=0)
+        stds.append(std)
+        zcol ='znorm_' + col
+        zcols.append(zcol)
+        vals[nz] = (vals[nz] - nz_vals.mean())/std
+        df[zcol] = vals
+ 
+    med_med = np.median(meds)
+    med_std = np.median(stds)
+
+    df[zcols] *= med_std
+    df[zcols] += med_med
+      
+    return zcols
+    
+
+def old_make_znorm(df, cols1, cols2):
     
     meds = []
     stds = []
@@ -95,8 +122,7 @@ def make_znorm(df, cols1, cols2):
       
     return zcols1, zcols2
 
-
-def old_make_znorm(df):
+def very_old_make_znorm(df):
     
     valuecols = df.columns.to_list()
     meds = []

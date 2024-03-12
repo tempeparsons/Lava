@@ -95,10 +95,12 @@ def boxplots(df, value_cols, pdf, scatter_colors=['#D00000','#A0A000','#0080FF']
     ax2.set_xlim(-0.5, nc-0.5)  
     ax2.set_xticks(x_ticks)
     ax2.set_xticklabels(x_ticks+1)
-    ax2.set_xlabel('Sample column')
+    ax2.set_xlabel('Sample column', fontsize=9)
+    ax2.set_ylabel('$log_2$(abundance)', fontsize=9)
+    ax1.set_ylabel('$log_2$(abundance)', fontsize=9)
     ax2.tick_params('x', top=True)
     
-    plt.subplots_adjust(hspace=0.35, top=0.90, bottom=0.1, left=0.05, right=0.95)    
+    plt.subplots_adjust(hspace=0.25, top=0.90, bottom=0.1, left=0.10, right=0.95)    
     _watermark(fig)
     
     if pdf:
@@ -109,7 +111,62 @@ def boxplots(df, value_cols, pdf, scatter_colors=['#D00000','#A0A000','#0080FF']
     plt.close()
     
     
-def histograms(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], nbins=50):
+def plot_norm(df, value_cols, norm_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], bin_size=1.0, alpha=0.7):
+
+    cmap = LinearSegmentedColormap.from_list('main', colors)
+    
+    
+    fig, (ax1, ax2) = plt.subplots(1,2, sharey=True, figsize=(8, 4))
+    
+    n = len(value_cols)
+
+    all_vals = np.array(df[value_cols])
+    min_val = int(10.0 * np.nanmin(all_vals)) * 0.1
+    max_val = int(10.0 * np.nanmax(all_vals) + 1.0) * 0.1
+    bins = np.arange(min_val, max_val, bin_size)
+
+    all_zvals = np.array(df[norm_cols])
+    min_zval = int(10.0 * np.nanmin(all_zvals)) * 0.1
+    max_zval = int(10.0 * np.nanmax(all_zvals) + 1.0) * 0.1
+    zbins = np.arange(min_zval, max_zval, bin_size)
+    
+    for i in range(n):
+       color = cmap(i/(n-1.0))
+    
+       data = df[value_cols[i]]
+       hist, edges = np.histogram(data[~np.isnan(data)], bins=bins, density=True)
+       x_vals =  0.5 * (edges[:-1] + edges[1:])
+       ax1.plot(x_vals, hist, color=color, linewidth=0.50, alpha=alpha, label=value_cols[i])
+
+       data = df[norm_cols[i]]
+       hist, edges = np.histogram(data[~np.isnan(data)], bins=zbins, density=True)
+       x_vals =  0.5 * (edges[:-1] + edges[1:])
+       ax2.plot(x_vals, hist, color=color, linewidth=0.5, alpha=alpha, label=value_cols[i])
+    
+      
+    ax1.set_title('Input values')
+    ax1.set_xlabel('$log_2$(abundance)', fontsize=9)
+    ax1.set_ylabel('Probability density', fontsize=9)
+    
+    ax2.set_title('Normalized values')
+    ax2.set_xlabel('Probability density', fontsize=9)
+    ax2.set_xlabel('Norm. $log_2$(abundance)', fontsize=9)
+    
+    ax1.legend(fontsize=7)
+    ax2.legend(fontsize=7)
+    
+    plt.subplots_adjust(wspace=0.05, top=0.92, bottom=0.12, left=0.10, right=0.95)    
+    _watermark(fig)
+    
+    if pdf:
+        pdf.savefig(dpi=DPI)
+    else:
+        plt.show()
+    
+    plt.close()
+    
+    
+def histograms(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], bin_size=0.5):
 
     cols = list(df[value_cols])
     n_cols = len(cols)
@@ -118,15 +175,21 @@ def histograms(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], nbin
     ny = int(math.ceil(n_cols/nx))
     
     fig, axarr = plt.subplots(ny, nx, squeeze=False, figsize=(9, 7), sharex=True, sharey=True)
+    
+    all_vals = np.array(df[value_cols])
+    min_val = int(10.0 * np.nanmin(all_vals)) * 0.1
+    max_val = int(10.0 * np.nanmax(all_vals) + 1.0) * 0.1
+    bins = np.arange(min_val, max_val, bin_size)
      
     for i in range(nx*ny):
         ax = axarr.flat[i]
- 
+        ax.tick_params(axis='both', which='major', labelsize=8)
+        
         if i < n_cols:
             color = colors[i % len(colors)]
             data = df[value_cols[i]]
             data = data[~np.isnan(data)]
-            hist, edges = np.histogram(data[~np.isnan(data)], bins=nbins)
+            hist, edges = np.histogram(data[~np.isnan(data)], bins=bins)
             
             x_vals =  0.5 * (edges[:-1] + edges[1:])
             ax.plot(x_vals, hist, color=color, linewidth=1.0)
@@ -143,10 +206,10 @@ def histograms(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], nbin
             txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
             
             if (i // nx) == ny-1:
-                ax.set_xlabel('Data value')
+                ax.set_xlabel('$log_2$(abundance)', fontsize=9)
             
-            if (i % nx) == 0:
-                ax.set_ylabel('Bin count')
+            if (i % nx) == 0 and ((ny < 3) or ((i // ny) == (ny // 2))):
+                ax.set_ylabel(f'Bin count (width {bin_size})', fontsize=9)
             
             ax.grid(visible=True, which='major', axis='x', color='#808080', linewidth=0.5, linestyle='--', alpha=0.5, zorder=-1)
             
@@ -166,7 +229,7 @@ def histograms(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], nbin
     plt.close()
         
     
-def xy_plots(df, value_cols, ncols, pdf, colors=['#0080FF','#A0A000','#FF0000'], figsize=10.0, bg_color='#B0B0B0'):
+def xy_plots(df, value_cols, ncols, pdf, colors=['#00FFFF','#0000FF','#000000','#A00000','#AAAA00'], figsize=10.0, bg_color='#B0B0B0'):
     
     main_cmap = LinearSegmentedColormap.from_list('main', colors) # bad to good
     
@@ -201,7 +264,7 @@ def xy_plots(df, value_cols, ncols, pdf, colors=['#0080FF','#A0A000','#FF0000'],
             y_vals = data2[valid]
             
             rho = corr_mat[i,j]
-            goodness = (rho-min_corr)/(max_corr-min_corr)
+            goodness = (rho + 1.0) / 2.0 # (rho-min_corr)/(max_corr-min_corr)
             
             cmap = LinearSegmentedColormap.from_list('{i}+{j}', [main_cmap(goodness), '#000000'])
             ax.hexbin(x_vals, y_vals, cmap=cmap, gridsize=gridsize, mincnt=1, edgecolors='none')
@@ -238,7 +301,7 @@ def xy_plots(df, value_cols, ncols, pdf, colors=['#0080FF','#A0A000','#FF0000'],
     plt.close()
 
 
-def correlation_plot(df, value_cols, pdf, colors=['#0080FF','#A0A000','#D00000'], figsize=9.0, bg_color='#B0B0B0'):
+def correlation_plot(df, value_cols, pdf, colors=['#00FFFF','#0000FF','#000000','#A00000','#FFFF00'], figsize=9.0, bg_color='#B0B0B0'):
     
     cmap = LinearSegmentedColormap.from_list('gud', colors)
     
@@ -271,7 +334,7 @@ def correlation_plot(df, value_cols, pdf, colors=['#0080FF','#A0A000','#D00000']
      
     n, m = corr_mat.shape
     
-    im = ax0.matshow(corr_mat, cmap=cmap, extent=[0,m,0,n], aspect='auto')
+    im = ax0.matshow(corr_mat, cmap=cmap, extent=[0,m,0,n], aspect='auto', vmin=-1.0, vmax=1.0)
     ax0.tick_params(top=False, bottom=True, left=True, right=False,
                     labeltop=False, labelbottom=True, labelleft=True, labelright=False)
     ax0.set_xticks(np.arange(0.5,m+0.5))
