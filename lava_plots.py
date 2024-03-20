@@ -73,8 +73,11 @@ def boxplots(df, value_cols, pdf, scatter_colors=['#D00000','#A0A000','#0080FF']
     outlier_style = {'linewidth':1, 'markeredgecolor':'#D00000', 'markerfacecolor':'#FF8080'}
     med_style = {'linewidth':1, 'color':'#000000'}
     
+    maxw = max([len(x) for x in list(value_cols)])
+    fontsize = min(8, 80.0/maxw)
+    
     fig, (ax1, ax2) = plt.subplots(2,1, figsize=(8,8))
-    df.boxplot(column=value_cols, ax=ax1, grid=False, rot=45, fontsize=8, boxprops=box_style,
+    df.boxplot(column=value_cols, ax=ax1, grid=False, rot=45, fontsize=fontsize, boxprops=box_style,
                whiskerprops=line_style, capprops=line_style, flierprops=outlier_style, medianprops=med_style)     
     ax1.set_title('Sample value distributions')
 
@@ -193,8 +196,11 @@ def histograms(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], bin_
             
             x_vals =  0.5 * (edges[:-1] + edges[1:])
             ax.plot(x_vals, hist, color=color, linewidth=1.0)
-            ax.fill_between(x_vals, hist, 0, color=color, alpha=0.5) 
-            txt = ax.text(0.05, 0.9, cols[i], transform=ax.transAxes, fontsize=12)
+            ax.fill_between(x_vals, hist, 0, color=color, alpha=0.5)
+            
+            fontsize = min(12, 120.0/len(cols[i]))
+            
+            txt = ax.text(0.05, 0.9, cols[i], transform=ax.transAxes, fontsize=fontsize)
             txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
             
             n = len(data)
@@ -240,7 +246,10 @@ def xy_plots(df, value_cols, ncols, pdf, colors=['#00FFFF','#0000FF','#000000','
     
     gridsize = int(400//n)
     fontsize = min(1e3/(figsize * n), 14)
-
+    
+    max_label = max([len(x) for x in list(value_cols)])
+    label_fontsize = min(fontsize, (10.0*fontsize)/max_label)
+    
     data = np.array([df[col] for col in cols])
     data[~(data > 0)] =  np.nanmean(data) # Zeros and nans
     corr_mat = distance.pdist(data, metric='correlation') # Correlation 'distance" : 1.0 - rho
@@ -277,18 +286,18 @@ def xy_plots(df, value_cols, ncols, pdf, colors=['#00FFFF','#0000FF','#000000','
             ax.set_yticks([])
             
             if row == 0:
-                ax.set_xlabel(f'{cols[j]}', fontsize=fontsize)
+                ax.set_xlabel(f'{cols[j]}', fontsize=label_fontsize)
                 
             elif row == (n-1):    
                 ax.xaxis.set_label_position('top') 
-                ax.set_xlabel(f'{cols[j]}', fontsize=fontsize)
+                ax.set_xlabel(f'{cols[j]}', fontsize=label_fontsize)
   
             if col == 0:
-                ax.set_ylabel(f'{cols[i]}', fontsize=fontsize)
+                ax.set_ylabel(f'{cols[i]}', fontsize=label_fontsize)
                 
             elif col == (n-1):
                 ax.yaxis.set_label_position('right')     
-                ax.set_ylabel(f'{cols[i]}', fontsize=fontsize)
+                ax.set_ylabel(f'{cols[i]}', fontsize=label_fontsize)
 
     plt.subplots_adjust(wspace=0.0, hspace=0.0, top=0.95, bottom=0.05, left=0.05, right=0.95)
     _watermark(fig)
@@ -333,14 +342,17 @@ def correlation_plot(df, value_cols, pdf, colors=['#00FFFF','#0000FF','#000000',
     corr_mat = corr_mat[order[::-1]][:,order]
      
     n, m = corr_mat.shape
+   
+    max_label = max([len(x) for x in list(value_cols)])
+    label_fontsize = min(12, 120.0/max_label)
     
     im = ax0.matshow(corr_mat, cmap=cmap, extent=[0,m,0,n], aspect='auto', vmin=-1.0, vmax=1.0)
     ax0.tick_params(top=False, bottom=True, left=True, right=False,
                     labeltop=False, labelbottom=True, labelleft=True, labelright=False)
     ax0.set_xticks(np.arange(0.5,m+0.5))
-    ax0.set_xticklabels(sort_cols, rotation=90)
+    ax0.set_xticklabels(sort_cols, rotation=90, fontsize=label_fontsize)
     ax0.set_yticks(np.arange(0.5,n+0.5))
-    ax0.set_yticklabels(sort_cols)
+    ax0.set_yticklabels(sort_cols, fontsize=label_fontsize)
 
     plt.sca(ax1)
     hierarchy.dendrogram(linkage, orientation='right', link_color_func=lambda k: '#000000')
@@ -618,7 +630,7 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     
     sizes = min_size + (max_size-min_size) * intensity # min_size .. max_size
     
-    scatter_kw = dict(alpha=0.5, edgecolors='none', clip_on=False)
+    scatter_kw = dict(alpha=0.3, edgecolors='none', clip_on=False)
     hit_kw = dict(alpha=1.0, clip_on=False, edgecolor='k', linewidth=0.5)
     hit_txt_kw = dict(alpha=1.0, clip_on=False, va='center', ha='center', fontsize=label_size)
    
@@ -652,7 +664,7 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
         ax1.scatter(fcvalues[selection], pvalues[selection], s=sizes[selection], c=colors, **scatter_kw)
 
     marker_text = []
-
+    
     for i, name in enumerate(names):
         size = sizes[i]
         low_qual = not high_qual[i]
@@ -684,9 +696,12 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
         if marker_texts is None:
             text_alpha = 1.0
             
+            if not isinstance(name, str):
+                name = '?'
+            
             if low_pep:
-               text_color = lcolor
-               text_alpha = 0.5
+                text_color = lcolor
+                text_alpha = 0.5
                
             elif has_zeros[i]:
                 name = name + '$^{0}$'
