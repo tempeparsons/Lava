@@ -13,7 +13,7 @@ from matplotlib.colors import LinearSegmentedColormap
 import lava_util as util
 import lava_plots as plots
 
-VERSION = '0.2.4'
+VERSION = '0.2.5'
 
 plots.VERSION = VERSION
 
@@ -193,14 +193,13 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
            cat_colors.append(color)
            cats.append(klass)
        
-       fc = 2.0 ** (-lfc)
-       
-       j = list(df.columns).index('labels')
-       
-       df.insert(j+1, 'fold_change', fc)
-       df.insert(j+1, 'hit_class', cats)
-       
        df.rename(columns=nmap, inplace=True)
+       
+       j = list(df.columns).index('log2_fold_change')
+       
+       fc = 2.0 ** (-lfc)
+       df.insert(j, 'hit_class', cats)
+       df.insert(j, 'fold_change', fc)
        
        sort_cols = [-pvs]
        sort_cols.append(~((lfc <= -f_thresh) & (pvs >= p_thresh)))
@@ -274,6 +273,7 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
            
            for key in keys:
                df = plotdict[key]
+               
                in_colsA = [x for x in list(df.columns) if x.startswith('inA_') or x.startswith('npepA_')]
                in_colsB = [x for x in list(df.columns) if x.startswith('inB_') or x.startswith('npepB_')]
                sheet_name=key.replace(':::', '_vs_')
@@ -352,7 +352,9 @@ def _read_exp_file(df, file_path):
               fail(f'Sample column named {col_name} is not present in input data')
             
             for i, group in enumerate(groups):
-                group_dicts[i][group.strip()].append(col_name)
+                group = group.strip()
+                if group:
+                    group_dicts[i][group].append(col_name)
                 
             
     if group_dicts:
@@ -478,8 +480,8 @@ def _check_path(file_path, should_exist=True):
     
 def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table_path=None,
          idx_cols=None, ref_groups=None, markers=None, col_groups=None, min_peps=DEFAULT_MIN_PEPS, pep_col=None,
-         no_genes=False, remove_contaminents=True,  f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP, quiet=False,
-         colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
+         take_descripts=False, label_cols=None, remove_contaminents=True,  f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP,
+         quiet=False, colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
          split_x=False, hit_labels=False, hq_only=False, znorm_fc=False, quant_scale=False):
     
     in_path = _check_path(in_path, should_exist=True)
@@ -516,6 +518,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     cols = list(df.columns)
     n_cols = len(cols)
     group_dicts = None
+    extra_id_col = None
     
     if exp_path:  # Read from exp design file if possible
         group_dicts = _read_exp_file(df, exp_path)
@@ -562,58 +565,103 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     
     option_report.append(('Index column(s)', ' '.join(idx_cols)))
     
-    if no_genes:
-        df['labels'] = df[idx_cols[0]]
-        option_report.append(('Label column', idx_cols[0]))
+    if take_descripts:
+        info(f'Descriptions will be kept for output')
+
+    option_report.append(('Keep descriptions', take_descripts))
     
-    elif 'Gene Symbol' in df:
-        df['labels'] = df['Gene Symbol']
-        option_report.append(('Label column', 'Gene Symbol'))
+    if label_cols:
+        info(f'Specified label columns ' + '+'.join(label_cols))
     
-    elif 'Fasta headers' in df:
-        gene_names = []
-        for i, head in enumerate(df['Fasta headers']):
-            if not isinstance(head, str):
-                gene_names.append(df[idx_cols[0]][i])
-                continue
-                
-            gene_name = re.findall('GN=(\w+)', head)
-            
-            if not gene_name:
-              gene_name = re.findall('\|(\w+)\|', head)
-              
-            if gene_name:
-                gene_names.append(';'.join(sorted(set(gene_name))))
-                
-            else:
-                gene_names.append(df[idx_cols[0]][i])
+        if len(label_cols) == 1:
+            labels = list(df[label_cols[0]])
+        else:
+            vals = [[str(x) for x in df[col]] for col in label_cols]
+            labels = [':'.join(x) for x in zip(*vals)]
         
-        df['labels'] = gene_names
-        option_report.append(('Label column', 'Fasta GN'))
-        
-    elif 'Description' in df:
-        gene_names = []
-        
-        for i, desc in enumerate(df['Description']):
-            gene_name = []
-            match = re.search('GN=(\w+)', desc)
-            
-            if match:
-                gene_name = match.group(1)
-            else:
-                gene_name = df[idx_cols[0]][i]
-                 
-            gene_names.append(gene_name)
-        
-        df['labels'] = gene_names
-        option_report.append(('Label column', 'Description GN'))
     
     else:
-        df['labels'] = df[idx_cols[0]]
-        option_report.append(('Label column', idx_cols[0]))
+        if 'Gene Symbol' in df:
+            labels = list(df['Gene Symbol'])
+            label_cols = ['Gene Symbol']
+ 
+        elif 'Fasta headers' in df:
+            gene_names = []
+            for i, head in enumerate(df['Fasta headers']):
+                if not isinstance(head, str):
+                    gene_names.append(df[idx_cols[0]][i])
+                    continue
+ 
+                gene_name = re.findall('GN=(\w+)', head)
+ 
+                if not gene_name:
+                  gene_name = re.findall('\|(\w+)\|', head)
+ 
+                if gene_name:
+                    gene_names.append(';'.join(sorted(set(gene_name))))
+ 
+                else:
+                    gene_names.append(df[idx_cols[0]][i])
+
+            labels = gene_names
+            label_cols = ['Fasta GN']
+ 
+        elif 'Description' in df:
+            gene_names = []
+ 
+            for i, desc in enumerate(df['Description']):
+                gene_name = []
+                match = re.search('GN=(\w+)', desc)
+ 
+                if match:
+                    gene_name = match.group(1)
+                else:
+                    gene_name = df[idx_cols[0]][i]
+ 
+                gene_names.append(gene_name)
+ 
+            labels = gene_names
+            label_cols = ['Description GN']
+ 
+        else:
+            for col in DEFAULT_INDEX_COLS:
+                if col in df:
+                    df['labels'] = list(df[col])
+                
+            else:
+                col = idx_cols[0] 
+           
+            labels = list(df[col])
+            label_cols = [col]
     
+    
+    df['labels'] = [df[idx_cols[0]][i] if x in (np.nan,'',None) else x for i, x in enumerate(labels)]
+
+    option_report.append(('Label column', '+'.join(label_cols)))
     option_report.append(('Peptide column', pep_col or ''))
     option_report.append(('Min hit peptides', min_peps))
+    
+    # Descriptions
+    
+    if take_descripts:
+        if 'Description' in df:
+           df['description'] = list(df['Description'])
+        
+        elif 'Fasta headers' in df:
+           descriptions = []
+           for i, head in enumerate(df['Fasta headers']):
+               if (not head) or (head is np.nan):
+                 descriptions.append('None')
+                 continue
+               
+               description = re.findall('\|\S+\s+(.+)\s+OS=', head)
+               
+               if description:
+                   descriptions.append(description[0])
+               else:
+                   descriptions.append('None')
+
+           df['description'] = descriptions
     
     # Markers
     
@@ -648,8 +696,8 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
        for gname in sorted(group_dict):
            cols = group_dict[gname]
            
-           if gname in group_cols:
-               fail(f'Sample group "{gname}" is repeated in a different context; group names should only be present in one experimental design column.')
+           #if gname in group_cols:
+           #    fail(f'Sample group "{gname}" is repeated in a different context; group names should only be present in one experimental design column.')
            
            if len(cols) < 2:
                warn(f'Sample group "{gname}" contains only one sample; cannot be used')
@@ -664,7 +712,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
            for col in cols:
               if col not in value_cols:
                   if col in idx_cols:
-                      fail(f'Ovelap between index columns and sample columns not permitted; "{col}" is an index column.')
+                      fail(f'Overlap between index columns and sample columns not permitted; "{col}" is an index column.')
                 
                   value_cols.append(col)
     
@@ -725,7 +773,16 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
           df = df[df['Majority protein IDs'].str.startswith('REV_') == False]
   
     if remove_contaminents and software in SOFT_PD:
-        df = df[df['Description'].str.contains('Keratin') == False]
+        if 'Description' in df:
+            df = df[df['Description'].str.contains('Keratin') == False]
+            df = df[df['Description'].str.contains('Trypsin') == False]
+
+    if remove_contaminents:
+        for col in DEFAULT_INDEX_COLS:
+            if col == idx_cols[0] and len(idx_cols) == 1:
+                df = df[df.index.str.startswith('cRAP') == False]
+            elif col in df:
+                df = df[df[col].str.startswith('cRAP') == False]
     
     post_cull = df.shape
 
@@ -858,6 +915,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     if znorm_fc:
       info('Plotting distribution normalization')
       plots.plot_norm(df, value_cols, norm_cols, pdf)
+
       
     info(f'Using log2 fold-change threshold: {f_thresh}')
     for g1, g2 in pairs:
@@ -961,12 +1019,16 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         df2 = util.ttest_from_stats_eqvar(df2)
         df2 = df2.drop(columns = zgrp1 + zgrp2 + grp1 + grp2)
         
-        col_selection = ['protein_id','labels'] if extra_id_col else ['labels']
+        col_selection = ['protein_id'] if extra_id_col else []
+        
+        if 'description' in orig_df:
+            df2['description'] = orig_df['description']
+            col_selection += ['description']
             
         # Reorder
-        col_selection += ['grp1grp2_FC', 'pvals', 'Tpvals', 'nobs_grp1', 'nobs_grp2',
+        col_selection += ['labels','grp1grp2_FC', 'pvals', 'Tpvals', 'nobs_grp1', 'nobs_grp2',
                           'mean_grp2', 'mean_grp1', 'zmean_grp2', 'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
-        
+         
         if pep_col:
             col_selection.append('npeps')
          
@@ -1041,7 +1103,7 @@ def main(argv=None):
                                epilog='For further help contact https://github.com/tempeparsons', prefix_chars='-', add_help=True)
  
     # Do we allow multiple (similar) inputs? ' ; nargs='+'
-    arg_parse.add_argument(metavar='INPUT_FILE', dest='d',
+    arg_parse.add_argument(metavar='INPUT_FILE', dest='in',
                            help='The input file path to read data from; the DIA results text file (protein-level, not peptide-level)')
     
     arg_parse.add_argument('-e', '--experiment-table', dest="e", metavar='FILE_PATH', default=None, 
@@ -1056,7 +1118,7 @@ def main(argv=None):
                            help=f"The name of the software used to process the data present in the input file. Available choices: {', '.join(VALID_SOFTWARE)}. Deafult: {DEFAULT_SOFTWARE}")
     
     default_idx = ' '.join(DEFAULT_INDEX_COLS)
-    arg_parse.add_argument('-i', '--index-columns', dest="i", metavar='INDEX_COLUMN', default=None,
+    arg_parse.add_argument('-i', '--index-columns', dest="i", metavar='INDEX_COLUMN', default=None, nargs='+',
                            help=f'The names, or numbers starting from 1, of one or more input columns used to uniquely index the data rows. If not specified, column names will be sought from the default list: {default_idx}.')
 
     arg_parse.add_argument('-n', '--min-peps', dest="n", metavar='PEP_COUNT_COLUMN', default=DEFAULT_MIN_PEPS, type=int, 
@@ -1098,10 +1160,16 @@ def main(argv=None):
     arg_parse.add_argument('-z', '--z-norm-fc', dest="z", action='store_true',
                            help=f"When set, fold changes will be calculated from Z-normalised values.")
 
+    arg_parse.add_argument('-d', '--descriptions', dest="d", action='store_true',
+                           help=f"If present, cary over any protein description information (inc. from FASTA headers) to output tables.")
+
+    arg_parse.add_argument('-l', '--label-columns', dest="l", nargs='+', default=None,
+                           help='The column names from the input to use as labels for data points; defaults to use gene names, if available, or else protein IDs')
+
     arg_parse.add_argument('-qs', '--quantile-scaling', dest="qs", action='store_true',
                            help='Use quantile scaling of abundance to determine spot size in the volcno plots, otherwise the (maximum) mean abundance is used directly.')
                            
-    arg_parse.add_argument('-l', '--log-status', dest="l", action='store_true',
+    arg_parse.add_argument('-lg', '--log-status', dest="lg", action='store_true',
                            help=f"When set, writes status information to a log file; the log file path will be based on the input path.")
     
     arg_parse.add_argument('-q', '--quiet-mode', dest="q", action='store_true',
@@ -1129,9 +1197,6 @@ def main(argv=None):
 
     arg_parse.add_argument('--no-labels', dest="no-labels", action='store_true',
                            help='If set, suppress the labelling of significant hits in the volcano plots')
-
-    arg_parse.add_argument('--no-genes', dest="no-genes", action='store_true',
-                           help='Suprresses the use of gene names (where availavle) in plots.')
     
     arg_parse.add_argument('-hq', '--hq-only', dest="hq-only", action='store_true',
                            help='If set, plot only the high-quality points on volcano plots. Otherwise low quality points ' \
@@ -1140,7 +1205,7 @@ def main(argv=None):
     
     args = vars(arg_parse.parse_args(argv))
  
-    in_path = args['d']
+    in_path = args['in']
     pdf_path = args['g']
     table_path = args['o']
     software = args['s']
@@ -1153,14 +1218,15 @@ def main(argv=None):
     f_thresh = args['f']
     p_thresh = args['p']
     quiet = args['q']
-    log = args['l']
+    log = args['lg']
     znorm_fc = args['z']
     min_peps = args['n']
     pep_col = args['nc']
     quant_scale = args['qs']
+    take_descripts = args['d']
+    label_cols = args['l']
     
     split_x = args['xs']
-    no_genes = args['no-genes']
     
     pos_color = args['pos-color']
     neg_color = args['neg-color']
@@ -1209,8 +1275,8 @@ def main(argv=None):
     
     colors = (pos_color, low_color, neg_color)
 
-    lava(in_path, exp_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns, min_peps, pep_col,
-         no_genes, remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc, quant_scale)
+    lava(in_path, exp_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns, min_peps, pep_col, take_descripts,
+         label_cols, remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc, quant_scale)
 
 
 if __name__ == '__main__':
@@ -1218,6 +1284,9 @@ if __name__ == '__main__':
     main()
     
 """
+
+Take labels from dual keys; exp_design can omit
+
 Example: 
 python3 lava.py VolcCLI_PD1.xlsx -o VolcCLI_PD1_out.xlsx -g VolcCLI_PD1.pdf -e groups_example.txt -l -r A -m P00918
 
@@ -1233,6 +1302,8 @@ python3 lava.py test/lakatos/Lakatos_protein_named.csv -e test/lakatos/exdes_ALS
 python3 lava.py test/mq/proteinGroups_originaldata.txt -e test/mq/expd.tsv -z -o test/mq/lakatos_01.xlsx -g test/mq/lakaos_01.pdf -s MQ -nc Peptides
 python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05b_znorm.pdf -nc "Number of Peptides by Search Engine CHIMERYS" -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05b_znorm.xlsx -r WT -f 10 -p 0.5 
 python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava04_znorm.pdf -z -o test/Nadine_LVA/Nadine_LVA_lava04_znorm.xlsx -r CNT -f 10 -p 5 -nc "Number of Peptides by Search Engine CHIMERYS"
+
+python3 lava.py test/Nadine_LVA/1338115639_Nadine_DDA_re_Proteins.txt -e test/Nadine_LVA/exp_design_lva_dda.csv -g test/Nadine_LVA/Nadine_LVA_DDA_lava05_znorm.pdf -z -o test/Nadine_LVA/Nadine_DDA_LVA_lava05_znorm.xlsx -r CNT -f 10 -p 5 -nc "Number of Peptides by Search Engine Sequest HT"
 
 """
     
