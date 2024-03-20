@@ -480,8 +480,8 @@ def _check_path(file_path, should_exist=True):
     
 def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table_path=None,
          idx_cols=None, ref_groups=None, markers=None, col_groups=None, min_peps=DEFAULT_MIN_PEPS, pep_col=None,
-         take_descripts=False, label_cols=None, remove_contaminents=True,  f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP,
-         quiet=False, colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
+         take_descripts=False, label_cols=None, extra_cols=None, remove_contaminents=True,  f_thresh=DEFALUT_FC,
+         p_thresh=DEFALUT_MAXP, quiet=False, colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
          split_x=False, hit_labels=False, hq_only=False, znorm_fc=False, quant_scale=False):
     
     in_path = _check_path(in_path, should_exist=True)
@@ -571,6 +571,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     option_report.append(('Keep descriptions', take_descripts))
     
     if label_cols:
+        label_cols = _check_cols(df, label_cols)
         info(f'Specified label columns ' + '+'.join(label_cols))
     
         if len(label_cols) == 1:
@@ -578,7 +579,6 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         else:
             vals = [[str(x) for x in df[col]] for col in label_cols]
             labels = [':'.join(x) for x in zip(*vals)]
-        
     
     else:
         if 'Gene Symbol' in df:
@@ -636,7 +636,12 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     
     
     df['labels'] = [df[idx_cols[0]][i] if x in (np.nan,'',None) else x for i, x in enumerate(labels)]
-
+ 
+    if extra_cols:
+        extra_cols = _check_cols(df, extra_cols)
+    else:
+        extra_cols = []
+    
     option_report.append(('Label column', '+'.join(label_cols)))
     option_report.append(('Peptide column', pep_col or ''))
     option_report.append(('Min hit peptides', min_peps))
@@ -1035,6 +1040,10 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         # Orig data last
         col_selection += [c for c in df2.columns if c.startswith('inA_')]
         col_selection += [c for c in df2.columns if c.startswith('inB_')]
+        
+        for col in extra_cols:
+            df2[col] = orig_df[col]
+            col_selection.append(col)
          
         plotdict[key] = df2[col_selection]
 
@@ -1166,6 +1175,9 @@ def main(argv=None):
     arg_parse.add_argument('-l', '--label-columns', dest="l", nargs='+', default=None,
                            help='The column names from the input to use as labels for data points; defaults to use gene names, if available, or else protein IDs')
 
+    arg_parse.add_argument('-x', '--extra-columns', dest="x", nargs='+', default=None,
+                           help='Extra column names from the input to carry across (unchanged) to the output tables')
+
     arg_parse.add_argument('-qs', '--quantile-scaling', dest="qs", action='store_true',
                            help='Use quantile scaling of abundance to determine spot size in the volcno plots, otherwise the (maximum) mean abundance is used directly.')
                            
@@ -1225,6 +1237,7 @@ def main(argv=None):
     quant_scale = args['qs']
     take_descripts = args['d']
     label_cols = args['l']
+    extra_cols = args['x']
     
     split_x = args['xs']
     
@@ -1276,7 +1289,7 @@ def main(argv=None):
     colors = (pos_color, low_color, neg_color)
 
     lava(in_path, exp_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns, min_peps, pep_col, take_descripts,
-         label_cols, remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc, quant_scale)
+         label_cols, extra_cols, remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc, quant_scale)
 
 
 if __name__ == '__main__':
