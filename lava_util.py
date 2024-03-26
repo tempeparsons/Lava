@@ -64,7 +64,50 @@ def prpn_log2FCs_over_threshold(df, thresh_int):
 
 from matplotlib import pyplot as plt
 
-def make_znorm(df, cols):
+def make_znorm(df, cols, bg_dict, bg_groups):
+    
+    meds = []
+    stds = []
+    zcols = []
+    bg_data = {}
+    
+    if bg_groups:
+        for bg_grp, bg_cols in bg_groups.items():
+            bg_vals = np.array(df[bg_cols]) # log_2 vals
+            nz = np.min(bg_vals, axis=1) > 0 # Not zeros or nans
+            n, m = bg_vals.shape # prots, samples
+            bg_means = np.nanmean(bg_vals[nz], axis=1) # Maybe missing some prots
+            bg_adj = np.zeros(n) 
+            bg_adj[nz] = bg_means - np.median(bg_means) # Centre on zero
+            bg_data[bg_grp] = bg_adj
+                       
+    for col in cols:
+        vals = np.array(df[col])
+        nz = vals > 0
+        
+        if col in bg_dict:
+            vals[nz] -= bg_data[bg_dict[col]][nz] # Adjust relative to background median
+        
+        nz_vals = vals[nz] # No zeros or nans
+        meds.append(np.median(nz_vals))
+        
+        std = nz_vals.std(ddof=0)
+        stds.append(std)
+        zcol ='znorm_' + col
+        zcols.append(zcol)
+        vals[nz] = (vals[nz] - nz_vals.mean())/std
+        df[zcol] = vals
+ 
+    med_med = np.median(meds)
+    med_std = np.median(stds)
+
+    df[zcols] *= med_std
+    df[zcols] += med_med
+      
+    return zcols
+    
+
+def make_znorm_no_bg(df, cols):
     
     meds = []
     stds = []
@@ -89,7 +132,7 @@ def make_znorm(df, cols):
     df[zcols] += med_med
       
     return zcols
-    
+
 
 def old_make_znorm(df, cols1, cols2):
     

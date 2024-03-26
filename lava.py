@@ -13,7 +13,7 @@ from matplotlib.colors import LinearSegmentedColormap
 import lava_util as util
 import lava_plots as plots
 
-VERSION = '0.2.5'
+VERSION = '0.3.0'
 
 plots.VERSION = VERSION
 
@@ -195,11 +195,11 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
        
        df.rename(columns=nmap, inplace=True)
        
-       j = list(df.columns).index('log2_fold_change')
+       j = list(df.columns).index('labels') +1
        
        fc = 2.0 ** (-lfc)
-       df.insert(j, 'hit_class', cats)
        df.insert(j, 'fold_change', fc)
+       df.insert(j, 'hit_class', cats)
        
        sort_cols = [-pvs]
        sort_cols.append(~((lfc <= -f_thresh) & (pvs >= p_thresh)))
@@ -313,6 +313,43 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
            info(f'Saved table to {file_path}')
 
 
+def _read_bg_file(df, bg_path, group_dicts, bg_groups):
+
+    import csv
+    
+    if '\t' in open(bg_path).read():
+        delimiter = '\t'
+    else:
+        delimiter = ','
+    
+    group_names = set()
+    for group_dict in group_dicts:
+        group_names.update(group_dict.keys())
+    
+    bg_dict = {}
+    with open(bg_path, newline='') as file_obj:
+        for row in csv.reader(file_obj, delimiter=delimiter):
+            if not row:
+                continue
+            
+            if row[0].startswith('#'):
+                continue
+            
+            group_name, bg_name = row[:2]
+            
+            if group_name not in group_names:
+               group_str = ', '.join(sorted(group_names))
+               fail(f'Group name "{group_name}" from background file {bg_path} does not refer to a group in the experimental design. Valid groups: {group_str}')
+            
+            if bg_name not in bg_groups:
+               group_str = ', '.join(sorted(bg_groups))
+               fail(f'Background name "{bg_name}" from background file {bg_path} does not refer to a group in the experimental design. Valid background groups: {group_str}')
+
+            bg_dict[group_name] = bg_name
+            
+    return bg_dict
+            
+            
 def _read_exp_file(df, file_path):
     
     if not os.path.exists(file_path):
@@ -387,7 +424,16 @@ def _read_exp_file(df, file_path):
     else:
         fail(f'Experimental design file {file_path} did not appear to contain anything useful')
     
-    return group_dicts # a list of {group_nameA:[col_name1, col_name2], group_nameB:[col_name3, col_name4],}
+    bg_groups = {}
+    compare_groups = []
+    
+    for group_dict in group_dicts:
+      if len(group_dict) == 1:
+        bg_groups.update(group_dict)
+      else:
+        compare_groups.append(group_dict)
+    
+    return compare_groups, bg_groups # a list of {group_nameA:[col_name1, col_name2], group_nameB:[col_name3, col_name4],}
     
       
 def _split_col_groups(df, group_spec):
@@ -478,7 +524,7 @@ def _check_path(file_path, should_exist=True):
     return file_path
 
     
-def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table_path=None,
+def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table_path=None,
          idx_cols=None, ref_groups=None, markers=None, col_groups=None, min_peps=DEFAULT_MIN_PEPS, pep_col=None,
          take_descripts=False, label_cols=None, extra_cols=None, remove_contaminents=True,  f_thresh=DEFALUT_FC,
          p_thresh=DEFALUT_MAXP, quiet=False, colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
@@ -486,6 +532,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     
     in_path = _check_path(in_path, should_exist=True)
     exp_path = _check_path(exp_path, should_exist=True)
+    bg_path = _check_path(bg_path, should_exist=False)
     pdf_path = _check_path(pdf_path, should_exist=False)
     table_path = _check_path(table_path, should_exist=False)
     
@@ -498,22 +545,23 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     
     option_report = [(f'Lava Report version {VERSION}', None),
                      ('Input options', ' '.join(sys.argv[1:])),
-                     ('Input data file',in_path),
-                     ('Exp. design file',exp_path),
-                     ('PDF output file',pdf_path),
-                     ('Table output file',table_path),
+                     ('Input data file', in_path),
+                     ('Exp. design file', exp_path),
+                     ('Background file', bg_path),
+                     ('PDF output file', pdf_path),
+                     ('Table output file', table_path),
                      ('Input software', software),
                      ('Min. fold-change', 2.0 ** f_thresh),
                      ('Max. p-value', f'{p_thresh:.2f}%'),
-                     ('Remove contaminents',remove_contaminents),
-                     ('Split volcano X-axis',split_x),
-                     ('Show hit labels',hit_labels),
-                     ('Show high quality',hq_only),
-                     ('Z-norm fold-changes',znorm_fc),
-                     ('Quantile spot size',quant_scale),
+                     ('Remove contaminents', remove_contaminents),
+                     ('Split volcano X-axis', split_x),
+                     ('Show hit labels', hit_labels),
+                     ('Show high quality', hq_only),
+                     ('Z-norm fold-changes', znorm_fc),
+                     ('Quantile spot size', quant_scale),
                      ]
         
-    color_pos, color_neg, color_low =   colors
+    color_pos, color_neg, color_low = colors
     df =  _read_data(in_path)
     cols = list(df.columns)
     n_cols = len(cols)
@@ -521,11 +569,19 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     extra_id_col = None
     
     if exp_path:  # Read from exp design file if possible
-        group_dicts = _read_exp_file(df, exp_path)
+        group_dicts, bg_groups = _read_exp_file(df, exp_path)
    
     elif col_groups:
         group_dicts = _split_col_groups(df, col_groups)
+        bg_groups = {}
+        
+    if bg_path:
+        bg_dict = _read_bg_file(df, bg_path, group_dicts, bg_groups)
+    else:
+        bg_dict = {}
     
+    # Remove any non-comparison groups, e.g. backgrounds
+        
     if idx_cols:
         idx_cols = _check_cols(df, idx_cols)
         
@@ -691,6 +747,11 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     info(msg)
     option_report.append((msg, None))
     value_cols = []
+    bg_cols = []
+    for bg_grp, cols in bg_groups.items():
+      bg_cols += cols
+      
+    bg_cols = sorted(set(bg_cols))
     
     groups = set()
     group_cols = {}
@@ -722,16 +783,26 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
                   value_cols.append(col)
     
        group_cols.update(group_dict)
+    
+    if bg_groups:
+        names = sorted(bg_groups)
+        info(f'Background groups:  {", ".join(names)}')
+        option_report.append(('Background groups', ", ".join(names)))
+    
+    else:
+        info(f'No background groups specified')
+        option_report.append(('Background groups', 'None specified'))
+         
        
     if ref_groups:
         ref_groups = set(ref_groups)
-        info(f'Ref. sample groups:  {" ".join(ref_groups)}')
-        option_report.append(('Ref. sample groups', " ".join(ref_groups)))
-
+        info(f'Ref. sample groups:  {", ".join(ref_groups)}')
+        option_report.append(('Ref. sample groups', ", ".join(ref_groups)))
 
         for ref_group in ref_groups:
            if ref_group not in groups:
-               fail('Reference sample group "{ref_group}" not found in experimental design. Available group names: {' '.join(sorted(groups))}')
+               avail = ' '.join(sorted(groups))
+               fail(f'Reference sample group "{ref_group}" not found in experimental design. Available group names: {avail}')
     
     else:
         ref_groups = set()
@@ -750,18 +821,25 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         if refs:
             non_ref = sorted(groups - ref_groups)
             for g1 in sorted(refs):
+                bg1 = f' (-{bg_dict[g1]})' if g1 in bg_dict else ''
+  
                 for g2 in non_ref:
-                    info(f'   {g1}  -  {g2}')
+                    bg2 = f' (-{bg_dict[g2]})' if g2 in bg_dict else ''
+                    msg = f'{g1}{bg1}  vs  {g2}{bg2}'
+                    info('   ' + msg)
                     pairs.append((g1, g2))
-                    option_report.append((f'Pair {len(pairs)}', f'{g1}  vs  {g2}'))
+                    option_report.append((f'Pair {len(pairs)}', msg))
           
         else:
             groups = sorted(groups)
             for i, g1 in enumerate(groups[:-1]):
+                bg1 = f' (-{bg_dict[g1]})' if g1 in bg_dict else ''
                 for g2 in groups[i+1:]:
-                    info(f'   {g1}  -  {g2}')
+                    bg2 = f' (-{bg_dict[g2]})' if g2 in bg_dict else ''
+                    msg = f'{g1}{bg1}  vs  {g2}{bg2}'
+                    info('   ' + msg)
                     pairs.append((g1, g2))
-                    option_report.append((f'Pair {len(pairs)}', f'{g1}  vs  {g2}'))
+                    option_report.append((f'Pair {len(pairs)}', msg))
 
     pre_cull = df.shape
     
@@ -893,8 +971,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     #print('updated numeric columns:', value_cols)
     
     orig_df = df.copy()
-    df = np.log2(df[value_cols])
-    
+    df = np.log2(df[value_cols + bg_cols])
     # box plots
     info('Plotting box-plots')
     plots.boxplots(df, value_cols, pdf)
@@ -906,6 +983,9 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     info('Plotting correlations')
     plots.correlation_plot(df, value_cols, pdf)
     
+    #info('Plotting PCA')
+    #plots.plot_pca(df, value_cols, group_cols, pdf)
+    
     # pair scatters
     ncols = 4
     info('Plotting comparisons')
@@ -915,12 +995,25 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
     overFCthresh = {}
     
     # Z normalise value distributions; used in T-test and optionally for fold-change
-    norm_cols = util.make_znorm(df, value_cols) # Now keeps original cols, now only done once
     
-    if znorm_fc:
+    col_bgs = {}
+    for grp, cols in group_cols.items():
+        if grp in bg_dict:
+           for col in cols:
+              col_bgs[col] = bg_dict[grp]
+    
+    norm_cols = util.make_znorm(df, value_cols, col_bgs, bg_groups) # Now keeps original cols, now only done once
+
+    info('Plotting PCA')
+    if bg_dict:
+        plots.plot_dual_pca(df, value_cols, norm_cols, group_cols, pdf)    
+    
+    else:
+        plots.plot_pca(df, value_cols, group_cols, pdf)    
+    
+    if znorm_fc or bg_dict:
       info('Plotting distribution normalization')
       plots.plot_norm(df, value_cols, norm_cols, pdf)
-
       
     info(f'Using log2 fold-change threshold: {f_thresh}')
     for g1, g2 in pairs:
@@ -1032,7 +1125,7 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
             
         # Reorder
         col_selection += ['labels','grp1grp2_FC', 'pvals', 'Tpvals', 'nobs_grp1', 'nobs_grp2',
-                          'mean_grp2', 'mean_grp1', 'zmean_grp2', 'zmean_grp1', 'zstd_grp1', 'zstd_grp2']
+                          'mean_grp1', 'mean_grp2', 'zmean_grp1', 'zmean_grp2', 'zstd_grp1', 'zstd_grp2']
          
         if pep_col:
             col_selection.append('npeps')
@@ -1085,6 +1178,13 @@ def lava(in_path, exp_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table
         plots.volcano(pdf, pair_name, plotdict[pair_name], f_thresh, p_thresh, min_peps,
                       colors, quant_scale, split_x, hq_only, hit_labels, markers, lw=0.25, ls='--',
                       marker_text_col=None)
+    
+    #if len(pairs) > 1:
+    #    for i, pair1 in enumerate(pairs[:-1]):
+    #        key1 = ':::'.join(pair1)
+    #        for pair2 in pairs[i+1:]:
+    #            key2 = ':::'.join(pair2)
+    #            plots.pp_plot(pdf, pair1, plotdict[key1], pair2, plotdict[key2])
         
     if table_path:
         save_volcano_table(pairs, plotdict, table_path, f_thresh, p_thresh, min_peps)
@@ -1121,7 +1221,13 @@ def main(argv=None):
                                 'In the experimental design table the sample names (matching the input data file) should be in the first column. ' \
                                 'Optionally, a column of short/new names for the samples may be specified; these must be unique for each row.' \
                                 'Subsequently, the groups (or categories) to which each samples belong are specified in further columns. ' \
-                                'Each grouping column defines a distinct set of comparisons, i.e. samples can be compared according to different variables.')
+                                'Each grouping column defines a distinct set of comparisons, i.e. samples can be compared according to different variables.' \
+                                'A column wiith only a single group is assumed to contain a grouping of background data, as used with the -b option.')
+
+    arg_parse.add_argument('-b', '--background-table', dest="b", metavar='FILE_PATH', default=None, 
+                           help='A file specifying background "subtractions" to perform; so comparisons can be made relative to a set of background data, which may differ for different conditions. ' \
+                                'This file is a comma- or tab-separated table with two columns that pair each experimental group (to be analysed) with it\'s ' \
+                                'background group. For both columns, group names must reger to groups in the experimental design table.')
    
     arg_parse.add_argument('-s', '--software', dest="s", metavar='SOFTWARE', default=DEFAULT_SOFTWARE,
                            help=f"The name of the software used to process the data present in the input file. Available choices: {', '.join(VALID_SOFTWARE)}. Deafult: {DEFAULT_SOFTWARE}")
@@ -1227,6 +1333,7 @@ def main(argv=None):
     markers = args['m']
     columns = args['c']
     exp_path = args['e']
+    bg_path = args['b']
     f_thresh = args['f']
     p_thresh = args['p']
     quiet = args['q']
@@ -1288,7 +1395,7 @@ def main(argv=None):
     
     colors = (pos_color, low_color, neg_color)
 
-    lava(in_path, exp_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns, min_peps, pep_col, take_descripts,
+    lava(in_path, exp_path, bg_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns, min_peps, pep_col, take_descripts,
          label_cols, extra_cols, remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc, quant_scale)
 
 
@@ -1317,6 +1424,8 @@ python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt
 python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava04_znorm.pdf -z -o test/Nadine_LVA/Nadine_LVA_lava04_znorm.xlsx -r CNT -f 10 -p 5 -nc "Number of Peptides by Search Engine CHIMERYS"
 
 python3 lava.py test/Nadine_LVA/1338115639_Nadine_DDA_re_Proteins.txt -e test/Nadine_LVA/exp_design_lva_dda.csv -g test/Nadine_LVA/Nadine_LVA_DDA_lava05_znorm.pdf -z -o test/Nadine_LVA/Nadine_DDA_LVA_lava05_znorm.xlsx -r CNT -f 10 -p 5 -nc "Number of Peptides by Search Engine Sequest HT"
+
+python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_3.csv -b test/20231210_Rab1b_T72_mutant/exp_bg_3.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lavaTEST_znorm.pdf -nc "Number of Peptides by Search Engine CHIMERYS" -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lavaTEST_znorm.xlsx -f 10 -p 0.5 
 
 """
     

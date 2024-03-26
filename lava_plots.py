@@ -114,11 +114,178 @@ def boxplots(df, value_cols, pdf, scatter_colors=['#D00000','#A0A000','#0080FF']
     plt.close()
     
     
+def plot_dual_pca(df, value_cols, norm_cols, group_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], size=10):
+    
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+    
+    groups = sorted(group_cols)
+    n_groups = len(groups)
+    col_groups = {}
+    for group, cols in group_cols.items():
+        for col in cols:
+            col_groups[col] = group
+    
+    data = np.array(df[value_cols])
+    zdata = np.array(df[norm_cols])
+    
+    n_prots, n_samples = data.shape
+    
+    # Remove all blank
+    s_means = np.nanmean(data, axis=0)
+    data = np.nan_to_num(data)
+    data = data[data.sum(axis=1) > 0.0]
+    sz_means = np.nanmean(zdata, axis=0)
+    zdata = np.nan_to_num(zdata)
+    zdata = zdata[zdata.sum(axis=1) > 0.0]
+    
+    for i in range(n_samples):
+        z = data[:,i] == 0.0
+        data[z, i] = s_means[i]
+        z = zdata[:,i] == 0.0
+        zdata[z, i] = sz_means[i]
+    
+    scaler = StandardScaler()
+    data = data.T  # expt_samples, proteins
+    data = scaler.fit_transform(data)
+
+    zdata = zdata.T  # expt_samples, proteins
+    zdata = scaler.fit_transform(zdata)
+
+    cmap = LinearSegmentedColormap.from_list('group_colors', colors)
+    
+    grp_colors = [cmap(x) for x in np.linspace(0.0, 1.0, n_groups)]
+    grp_colors = dict(zip(groups, grp_colors))
+    
+    sample_colors = [grp_colors[col_groups[col]] for col in value_cols]
+    
+    pca = PCA(n_components=2)
+    data_trans = pca.fit_transform(data)
+    e_var_x, e_var_y = pca.explained_variance_ratio_
+    
+    pca2 = PCA(n_components=2)
+    zdata_trans = pca2.fit_transform(zdata)
+    e_var_zx, e_var_zy = pca2.explained_variance_ratio_
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
+    
+    x_vals, y_vals = data_trans.T
+    x_zvals, y_zvals = zdata_trans.T
+    
+    ax1.set_title('Input values PCA')
+    ax1.scatter(x_vals, y_vals, s=size, color=sample_colors)
+    ax1.set_xlabel(f'PC1 ({e_var_x*100.0:.2f}%)')
+    ax1.set_ylabel(f'PC2 ({e_var_y*100.0:.2f}%)')
+
+    ax2.set_title('Background adjusted PCA')
+    ax2.scatter(x_zvals, y_zvals, s=size, color=sample_colors)
+    ax2.set_xlabel(f'PC1 ({e_var_zx*100.0:.2f}%)')
+    ax2.set_ylabel(f'PC2 ({e_var_zy*100.0:.2f}%)')
+    
+    for group in groups:
+        ax1.scatter([], [], s=size, color=grp_colors[group], label=group)
+    
+    for i, col in enumerate(value_cols):
+        txt = ax1.annotate(col, xy=(x_vals[i], y_vals[i]), xytext=(5, 5), fontsize=8, alpha=0.5,
+                           ha='left', va='top', textcoords='offset points', clip_on=False)
+        txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
+        txt = ax2.annotate(col, xy=(x_zvals[i], y_zvals[i]), xytext=(5, 5), fontsize=8, alpha=0.5,
+                           ha='left', va='top', textcoords='offset points', clip_on=False)
+        txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
+
+    plt.subplots_adjust(wspace=0.25, top=0.90, bottom=0.15, left=0.10, right=0.95)    
+    
+    ax1.legend(fontsize=8) # , bbox_to_anchor=(1.04, 1), loc='upper left', )
+
+    _watermark(fig)
+    
+    if pdf:
+        pdf.savefig(dpi=DPI)
+    else:
+        plt.show()
+    
+    plt.close()
+    
+
+    
+def plot_pca(df, value_cols, group_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], size=10):
+    
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+    
+    groups = sorted(group_cols)
+    n_groups = len(groups)
+    col_groups = {}
+    for group, cols in group_cols.items():
+        for col in cols:
+            col_groups[col] = group
+    
+    data = np.array(df[value_cols])
+    n_prots, n_samples = data.shape
+    
+    # Remove all blank
+    s_means = np.nanmean(data, axis=0)
+    data = np.nan_to_num(data)
+    data = data[data.sum(axis=1) > 0.0]
+    
+    for i in range(n_samples):
+        z = data[:,i] == 0.0
+        data[z, i] = s_means[i]
+    
+    scaler = StandardScaler()
+    data = data.T  # expt_samples, proteins
+    data = scaler.fit_transform(data)
+
+    cmap = LinearSegmentedColormap.from_list('group_colors', colors)
+    
+    grp_colors = [cmap(x) for x in np.linspace(0.0, 1.0, n_groups)]
+    grp_colors = dict(zip(groups, grp_colors))
+    
+    cols = [x[6:] if x.startswith('znorm_') else x for x in value_cols]
+    sample_colors = [grp_colors[col_groups[col]] for col in cols]
+    
+    pca = PCA(n_components=2)
+
+    data_trans = pca.fit_transform(data)
+    
+    e_var_x, e_var_y = pca.explained_variance_ratio_
+
+    fig, ax1 = plt.subplots(1, 1, figsize=(7, 5))
+    
+    x_vals, y_vals = data_trans.T
+    
+    ax1.set_title('Sample PCA')
+    ax1.scatter(x_vals, y_vals, s=size, color=sample_colors)
+    ax1.set_xlabel(f'PC1 ({e_var_x*100.0:.2f}%)')
+    ax1.set_ylabel(f'PC2 ({e_var_y*100.0:.2f}%)')
+    
+    for group in groups:
+        ax1.scatter([], [], s=size, color=grp_colors[group], label=group)
+    
+    for i, col in enumerate(cols):
+        txt = ax1.annotate(col, xy=(x_vals[i], y_vals[i]), xytext=(5, 5), fontsize=8, alpha=0.5,
+                           ha='left', va='top', textcoords='offset points', clip_on=False)
+        txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
+
+    plt.subplots_adjust(hspace=0.25, top=0.90, bottom=0.1, left=0.10, right=0.8)    
+    
+    ax1.legend(fontsize=8, bbox_to_anchor=(1.04, 1), loc='upper left', )
+
+    _watermark(fig)
+    
+    if pdf:
+        pdf.savefig(dpi=DPI)
+    else:
+        plt.show()
+    
+    plt.close()
+    
+    
+    
 def plot_norm(df, value_cols, norm_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], bin_size=1.0, alpha=0.7):
 
     cmap = LinearSegmentedColormap.from_list('main', colors)
-    
-    
+
     fig, (ax1, ax2) = plt.subplots(1,2, sharey=True, figsize=(8, 4))
     
     n = len(value_cols)
@@ -440,7 +607,7 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
              ax1.set_xlabel('$log_2$ fold-change', fontsize=fontsize)
          
     
-    plt.subplots_adjust(wspace=0.15, hspace=0.1, top=0.8, bottom=0.2, left=0.1, right=0.95)
+    plt.subplots_adjust(wspace=0.15, hspace=0.15, top=0.8, bottom=0.2, left=0.1, right=0.95)
     
     _watermark(fig)
 
@@ -451,6 +618,87 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
     
     plt.close()
 
+
+def pp_plot(pdf, pair_name1, df1, pair_name2, df2, colors=['#0080FF','#A0A000','#D00000'], max_size=160.0, min_size=8.0):
+    
+    # Add plot title
+    # At labels, outline and opacity for hits > pthresh and fcthresh
+    # Mark pthresh lines
+    # Legend similar to volcano
+    # Add option to have these plots
+    # Table output: fcs and pvals, max(pvalue) > thresh, max(p_value) > thresh (different colours), n_obs 1,2,3,4, n_pep, samce accession, labels, extra cols as volc.
+    # Color hits according to A,B, A & B
+    # Consider flipping axes
+    
+    cmap = LinearSegmentedColormap.from_list('pp', colors[::-1])
+
+    index1 = df1.index
+    index2 = df2.index
+    
+    common = set(index1) & set(index2)
+    
+    pvalues1 = np.array(df1.loc[common, 'Tpvals'])
+    fcvalues1 = np.array(df1.loc[common, 'grp1grp2_FC'])
+    
+    pvalues2 = np.array(df2.loc[common, 'Tpvals'])
+    fcvalues2 = np.array(df2.loc[common, 'grp1grp2_FC'])
+    
+    
+    p1, p2 = pair_name1
+    q1, q2 = pair_name2
+
+    fig, axarr = plt.subplots(2, 2, figsize=(10,10), sharex=True, sharey=True)
+    
+    for row in (0,1):
+      if row:
+        sel2 = fcvalues2 >= 0
+        weights2 = fcvalues2
+        gr2 = f'{q2} > {q1}'
+      else:
+        sel2 = fcvalues2 < 0
+        weights2 = -fcvalues2
+        gr2 = f'{q1} > {q2}'
+       
+      for col in (0,1):
+        if col:
+          sel1 = fcvalues1 >= 0
+          weights1 = fcvalues1
+          gr1 = f'{p2} > {p1}'
+        else:
+          sel1 = fcvalues1 < 0
+          weights1 = -fcvalues1
+          gr1 = f'{p1} > {p2}'
+          
+        selection = sel1 & sel2
+        weights = weights1[selection] * weights2[selection]
+        weights /= np.abs(weights).max()
+        weights = (1.0 + weights) / 2.0 # 0..1
+        
+        sizes = weights * weights
+        sizes = min_size + (max_size-min_size) * sizes
+        
+        ax = axarr[row, col]
+        ax.text(0.05, 0.95, f'{gr1}, {gr2}', ha='left', va='top', transform=ax.transAxes, fontsize=8, clip_on=False)
+        
+        ax.scatter(pvalues1[selection], pvalues2[selection], c=[cmap(w) for w in weights], alpha=0.3, s=sizes)
+        
+        if row == 1:
+          ax.set_xlabel(f'p-value {pair_name1}')
+        
+        if col == 0:
+          ax.set_ylabel(f'p-value {pair_name2}')
+    
+    plt.subplots_adjust(wspace=0.0, hspace=0.0, top=0.9, bottom=0.1, left=0.1, right=0.9)
+    
+    _watermark(fig)
+
+    if pdf:
+        pdf.savefig(dpi=DPI)
+    else:
+        plt.show()
+    
+    plt.close()
+   
 
 def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0A000','#D00000'],
             quant_scale=False, split_x=True, hq_only=False, hit_labels=True, markers=None, lw=0.25,
@@ -507,7 +755,7 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     
     d = .8
     diag_kwargs = dict(marker=[(-1, -d), (1, d)], markersize=8,
-                      linestyle="none", color='k', mec='k', mew=1, clip_on=False)
+                       linestyle="none", color='k', mec='k', mew=1, clip_on=False)
     
     if neg_split and pos_split:
         n1, n2 = neg_split
@@ -809,3 +1057,48 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     plt.close()
     
 
+"""
+gridsize = 100
+colors=['#00FFFF','#0000FF','#000000','#A00000','#FFFF00']
+show_pairs = defaultdict(list)
+for g1, g2 in pairs:
+    bg1 = bg_dict.get(g1, 'None')
+    bg2 = bg_dict.get(g2, 'None')
+    
+    if bg1 != bg2:
+        key = tuple(sorted([bg1, bg2]))
+        show_pairs[key].append((g1, g2))
+
+n_rows = len(show_pairs)
+n_cols = 2 # before, after
+fig, axarr = plt.subplots(n_rows, n_cols)
+cmap = LinearSegmentedColormap.from_list(colors)
+
+for row, key in enumerate(show_pairs):
+    bg1, bg2 = key
+    x_vals1 = []
+    y_vals1 = []
+    x_vals2 = []
+    y_vals2 = []
+    for g1, g2 in show_pairs[key]:
+        x_vals1.append(df[g1])
+        y_vals1.append(df[g2])
+        x_vals2.append(df['znorm_'+g1])
+        y_vals2.append(df['znorm_'+g2])
+      
+    ax1 = axarr[row, 0]
+    ax2 = axarr[row, 1]
+    
+    ax1.hexbin(x_vals1, y_vals1, cmap=cmap, gridsize=gridsize, mincnt=1, edgecolors='none')
+    ax2.hexbin(x_vals2, y_vals2, cmap=cmap, gridsize=gridsize, mincnt=1, edgecolors='none')
+    
+    ax1.set_xlabel('{bg1} $log_2$ count')
+    ax1.set_ylabel('{bg2} $log_2$ count')
+    ax2.set_xlabel('{bg1} Adj. $log_2$ count')
+    ax2.set_ylabel('{bg2} Adj. $log_2$ count')
+    
+    for row == 0:
+      ax1.set_title('Original comparisons (aggregated)')
+      ax2.set_title('Adjusted comparisons')
+    
+"""
