@@ -23,8 +23,21 @@ def _watermark(fig, text=None):
     
     plt.text(1.0-pad, pad, text, transform=fig.transFigure, color='#000000', alpha=0.25, va='bottom', ha='right', fontsize=8.0)
 
-    
 
+def _nice_tick_labels(labels, texp=1e-4):
+    
+    new = []
+    for t in labels:
+        if t > texp:
+            new.append(f'{t}')
+        else:
+            pwr = np.log10(t) 
+            new.append(f'$10^{{{pwr}}}$')
+    
+    
+    return new
+    
+    
 def plot_sums_means_nans(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], edge_color='#404040'):
     
     totals = df[value_cols].sum(axis=0)
@@ -619,23 +632,27 @@ def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=
     plt.close()
 
 
-def pp_plot(pdf, pair_name1, df1, pair_name2, df2, colors=['#0080FF','#A0A000','#D00000'], max_size=160.0, min_size=8.0):
-    
-    # Add plot title
-    # At labels, outline and opacity for hits > pthresh and fcthresh
-    # Mark pthresh lines
-    # Legend similar to volcano
-    # Add option to have these plots
-    # Table output: fcs and pvals, max(pvalue) > thresh, max(p_value) > thresh (different colours), n_obs 1,2,3,4, n_pep, samce accession, labels, extra cols as volc.
-    # Color hits according to A,B, A & B
-    # Consider flipping axes
-    
-    cmap = LinearSegmentedColormap.from_list('pp', colors[::-1])
+def pp_plot(pdf, pair1, df1, pair2, df2, p_thresh, fc_thresh, min_peps, colors=['#0080FF','#A0A000','#D00000'],
+            max_size=160.0, min_size=8.0, label_size=5.0):
 
+    # ? Add option to have these plots
+    # Table output: fcs and pvals, max(pvalue) > thresh, max(p_value) > thresh (different colours), n_obs 1,2,3,4, n_pep, samce accession, labels, extra cols as volc.
+    
+    a1, a2 = pair1
+    b1, b2 = pair2
+    nlp = - np.log2(p_thresh)
+    
+    cmap = LinearSegmentedColormap.from_list('pp', colors)
+    grey = '#80808080'
+    lcolor = '#808080'
+    
+    hline_kw = dict(ls='--', alpha=0.5, lw=0.5, color=lcolor)
     index1 = df1.index
     index2 = df2.index
     
     common = set(index1) & set(index2)
+    not1 = set(index2) - set(index1)
+    not2 = set(index1) - set(index2)
     
     pvalues1 = np.array(df1.loc[common, 'Tpvals'])
     fcvalues1 = np.array(df1.loc[common, 'grp1grp2_FC'])
@@ -643,50 +660,188 @@ def pp_plot(pdf, pair_name1, df1, pair_name2, df2, colors=['#0080FF','#A0A000','
     pvalues2 = np.array(df2.loc[common, 'Tpvals'])
     fcvalues2 = np.array(df2.loc[common, 'grp1grp2_FC'])
     
+    names = np.array(df1.loc[common, 'labels'])
     
-    p1, p2 = pair_name1
-    q1, q2 = pair_name2
+    has_zeros = (np.array(df1.loc[common, 'nobs_grp1']) == 0) | \
+                (np.array(df1.loc[common, 'nobs_grp2']) == 0) | \
+                (np.array(df2.loc[common, 'nobs_grp1']) == 0) | \
+                (np.array(df2.loc[common, 'nobs_grp2']) == 0)
+    
+    low_qual =  (np.array(df1.loc[common, 'nobs_grp1']) < 2) | \
+                (np.array(df1.loc[common, 'nobs_grp2']) < 2) | \
+                (np.array(df2.loc[common, 'nobs_grp1']) < 2) | \
+                (np.array(df2.loc[common, 'nobs_grp2']) < 2)
+   
+    if 'npeps' in df1:
+        npeps = np.array(df1.loc[common, 'npeps'])
+    else:
+        npeps = np.full(len(names), min_peps)
+    
+    dual = np.ones(len(names), bool)
+    
+    if not1: # Not in first comparison
+        n = len(not1)
+        pvalues1 = np.concatenate([pvalues1, np.zeros(n)])
+        fcvalues1 = np.concatenate([fcvalues1, np.zeros(n)])
+        pvalues2 = np.concatenate([pvalues2, np.array(df2.loc[not1, 'Tpvals'])])
+        fcvalues2 = np.concatenate([fcvalues2,np.array(df2.loc[not1, 'grp1grp2_FC'])])
+        names = np.concatenate([names,np.array(df2.loc[not1, 'labels'])])
+        has_zeros = np.concatenate([has_zeros, np.zeros(n, bool)])
+        low_qual = np.concatenate([low_qual, np.zeros(n, bool)])
+        dual = np.concatenate([dual, np.zeros(n, bool)])
+        if 'npeps' in df1:
+            npeps = np.concatenate([npeps, np.array(df2.loc[not1, 'npeps'])])
+     
+    if not2: # Not in second comparison
+        n = len(not2)
+        pvalues2 = np.concatenate([pvalues2, np.zeros(n)])
+        fcvalues2 = np.concatenate([fcvalues2, np.zeros(n)])
+        pvalues1 = np.concatenate([pvalues1, np.array(df1.loc[not2, 'Tpvals'])])
+        fcvalues1 = np.concatenate([fcvalues1, np.array(df1.loc[not2, 'grp1grp2_FC'])])
+        names = np.concatenate([names, np.array(df1.loc[not2, 'labels'])])
+        has_zeros = np.concatenate([has_zeros, np.zeros(n, bool)])
+        low_qual = np.concatenate([low_qual, np.zeros(n, bool)])
+        dual = np.concatenate([dual, np.zeros(n, bool)])
 
-    fig, axarr = plt.subplots(2, 2, figsize=(10,10), sharex=True, sharey=True)
+        if 'npeps' in df1:
+            npeps = np.concatenate([npeps, np.array(df1.loc[not2, 'npeps'])])
     
-    for row in (0,1):
-      if row:
-        sel2 = fcvalues2 >= 0
-        weights2 = fcvalues2
-        gr2 = f'{q2} > {q1}'
-      else:
-        sel2 = fcvalues2 < 0
-        weights2 = -fcvalues2
-        gr2 = f'{q1} > {q2}'
-       
-      for col in (0,1):
-        if col:
-          sel1 = fcvalues1 >= 0
-          weights1 = fcvalues1
-          gr1 = f'{p2} > {p1}'
-        else:
-          sel1 = fcvalues1 < 0
-          weights1 = -fcvalues1
-          gr1 = f'{p1} > {p2}'
+    p_best = np.maximum(pvalues1, pvalues2)
+    f_worst = np.where(np.abs(fcvalues1) < np.abs(fcvalues2), fcvalues1, fcvalues2)
+    
+    is_hit = ((pvalues1 >= nlp) & (np.abs(fcvalues1) >= fc_thresh)) | ((pvalues2 >= nlp) & (np.abs(fcvalues2) >= fc_thresh)) 
+    
+    p_best /= p_best.max() # 0..1
+    f_worst /= np.abs(f_worst).max() # 0..1
+    
+    weights = f_worst # -1..1
+    weights /= np.abs(weights).max()
+
+    sizes = weights * weights
+    sizes = min_size + (max_size-min_size) * sizes
+    
+    weights = (1.0 + weights) / 2.0 # 0..1
+    
+    p_min = 0.0
+    p_max = math.ceil(max(pvalues1.max(), pvalues2.max()))
+    
+    s0 = (npeps < min_peps) & dual 
+    s1 = ~is_hit & ~s0 & dual
+    s2 = is_hit & ~s0 & dual
+    s3 = is_hit & ~s0 & ~dual
+    
+    pvalues1[fcvalues1 < 0.0] *= -1.0
+    pvalues2[fcvalues2 < 0.0] *= -1.0
+
+    fig, ax = plt.subplots(figsize=(10,10))
+    ax.set_title(f'[{a1} vs {a2}] vs [{b1} vs {b2}]', fontsize=14)
+    
+    ax.scatter(pvalues1[s0], pvalues2[s0], color=lcolor, alpha=0.3, clip_on=False, s=sizes[s0], zorder=1)
+    ax.scatter(pvalues1[s1], pvalues2[s1], c=[cmap(w) for w in weights[s1]], alpha=0.3, clip_on=False, s=sizes[s1], zorder=2)
+    ax.scatter(pvalues1[s2], pvalues2[s2], c=[cmap(w) for w in weights[s2]], alpha=1.0,  edgecolor='k', linewidth=0.5, clip_on=False, s=sizes[s2], zorder=4)
+    ax.scatter(pvalues1[s3], pvalues2[s3], c=[cmap(w) for w in weights[s3]], alpha=1.0,  edgecolor='#800080', linewidth=0.5, clip_on=False, s=sizes[s3], zorder=3)
+    
+    hit_idx = np.nonzero(is_hit)[0]
+    for i in hit_idx:
+        ds = 0.5 * np.sqrt(sizes[i])
+        name = names[i]
+        text_alpha = 1.0
+        low_pep = s0[i]
+        x = pvalues1[i]
+        y = pvalues2[i]
+ 
+        if not isinstance(name, str):
+            name = '?'
+ 
+        if low_pep:
+            text_color = lcolor
+            text_alpha = 0.5
+            zorder = 1
+        
+        if not dual[i]:
+            name = name + '$^{!}$'
+            text_color = '#800080'
+            zorder = 2
           
-        selection = sel1 & sel2
-        weights = weights1[selection] * weights2[selection]
-        weights /= np.abs(weights).max()
-        weights = (1.0 + weights) / 2.0 # 0..1
+        elif has_zeros[i]:
+            name = name + '$^{0}$'
+            text_color = '#400040'
+            zorder = 3
+ 
+        elif low_qual[i]:
+            name = name + '$^{1}$'
+            text_color = '#400040'
+            zorder = 3
+ 
+        else:
+            text_color = '#000000'
+            zorder = 5
+ 
+        va = 'bottom' if y > 0 else 'top'
+        ha = 'left' if x > 0 else 'right'
+        xds = ds if x > 0 else -ds
+        yds = ds if y > 0 else -ds
+ 
+        txt = ax.annotate(name, xy=(x, y), alpha=text_alpha, color=text_color, xytext=(xds, yds), fontsize=label_size,
+                          textcoords='offset points', ha=ha, va=va, clip_on=False, zorder=zorder)
+        txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
+    
+    ax.axhline(0.0, **hline_kw)
+    ax.axvline(0.0, **hline_kw)
+    ax.axhline(nlp, **hline_kw)
+    ax.axvline(nlp, **hline_kw)
+    ax.axhline(-nlp, **hline_kw)
+    ax.axvline(-nlp, **hline_kw)
+    
+    ax.set_xlabel(f'p-value {a1} vs {a2}')
+    ax.set_ylabel(f'p-value {b1} vs {b2}')
+    ax.set_ylim(-p_max, p_max)
+    ax.set_xlim(-p_max, p_max)
         
-        sizes = weights * weights
-        sizes = min_size + (max_size-min_size) * sizes
-        
-        ax = axarr[row, col]
-        ax.text(0.05, 0.95, f'{gr1}, {gr2}', ha='left', va='top', transform=ax.transAxes, fontsize=8, clip_on=False)
-        
-        ax.scatter(pvalues1[selection], pvalues2[selection], c=[cmap(w) for w in weights], alpha=0.3, s=sizes)
-        
-        if row == 1:
-          ax.set_xlabel(f'p-value {pair_name1}')
-        
-        if col == 0:
-          ax.set_ylabel(f'p-value {pair_name2}')
+    ax.scatter([], [], s=0.5*min_size, color='w', edgecolor='k', linewidth=0.5, label='low min. fold-change')
+    ax.scatter([], [], s=5*min_size, color='w', edgecolor='k', linewidth=0.5, label='high min. fold-change')
+    ax.scatter([], [], s=2*min_size, color=cmap(0.9), edgecolor='k', linewidth=0.5, label='hit +fold change')
+    ax.scatter([], [], s=2*min_size, color=cmap(0.1), edgecolor='k', linewidth=0.5, label='hit -fold change')
+    ax.scatter([], [], s=2*min_size, color=cmap(0.5), label='insignificant')
+    if min_peps > 1:
+       ax.scatter([], [], s=2*min_size, color=lcolor, edgecolor='none', alpha=0.5, label='low pep count')
+    ax.scatter([], [], s=32, marker="$X^!$", color='#800080', edgecolor='none', label='comparison missing')
+    ax.scatter([], [], s=32, marker="$X^0$", color='#400040', edgecolor='none', label='vs all zeros')
+    ax.scatter([], [], s=32, marker="$X^1$", color='#400040', edgecolor='none', label='vs single')
+              
+    ax.legend(fontsize=6.2, loc='lower right')
+    
+    p = int(p_max)
+    ticks = np.logspace(-p, 0, p+1, base=10.0)
+    ticks = ticks[ticks > 2.0 ** (-p_max)]
+    tpos = -np.log2(ticks)
+    
+    tpos = np.concatenate([tpos, -tpos[:-1][::-1]])
+    ticks = np.concatenate([ticks, ticks[:-1][::-1]])
+    ticks = _nice_tick_labels(ticks)
+    
+    ax.set_yticks(tpos)
+    ax.set_yticklabels(ticks, fontsize=8)
+    ax.set_xticks(tpos)
+    ax.set_xticklabels(ticks, fontsize=8)
+    
+    # X    
+    ax.text(1.0, -0.04, f'{a1} > {a2}', ha='right', va='top', color=cmap(1.0), transform=ax.transAxes, fontsize=14, clip_on=False)
+    ax.text(0.0, -0.04, f'{a2} > {a1}', ha='left',  va='top', color=cmap(0.0), transform=ax.transAxes, fontsize=14, clip_on=False)
+    
+    # Y
+    ax.text(-0.065, 1.0, f'{b1} > {b2}', ha='right', va='top', rotation=90, color=cmap(1.0), transform=ax.transAxes, fontsize=14, clip_on=False)
+    ax.text(-0.065, 0.0, f'{b2} > {b1}', ha='right',  va='bottom', rotation=90, color=cmap(0.0), transform=ax.transAxes, fontsize=14, clip_on=False)
+    
+    xtlos = ax.get_xticklabels()
+    ytlos = ax.get_yticklabels()
+    for i, val in enumerate(tpos):
+        if val > 0:
+            xtlos[i].set_color(cmap(1.0))
+            ytlos[i].set_color(cmap(1.0))
+        if val < 0:
+            xtlos[i].set_color(cmap(0.0))
+            ytlos[i].set_color(cmap(0.0))
     
     plt.subplots_adjust(wspace=0.0, hspace=0.0, top=0.9, bottom=0.1, left=0.1, right=0.9)
     
@@ -711,7 +866,7 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
         markers = []
         
     pthresh_orig = pthresh
-    pthresh = -np.log2(0.01 * pthresh)
+    pthresh = -np.log2(pthresh)
     
     marker_texts = df[marker_text_col] if marker_text_col else None
     
@@ -745,7 +900,7 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
          neg_split, pos_split = None, None
     
     y_label = 'p-value'
-    p_label = f'{0.01 * pthresh_orig:.3g}'
+    p_label = f'{pthresh_orig:.3g}'
     p_label_kw = dict(xytext=(2,2), xycoords='data', textcoords='offset points',
                       color='#808080', fontsize=5, ha='left', va='bottom')
     
@@ -1019,7 +1174,7 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     
     ax.yaxis.tick_left()
     ax.set_yticks(-np.log2(y_ticks))
-    ax.set_yticklabels(y_ticks)
+    ax.set_yticklabels(_nice_tick_labels(y_ticks))
     
     ax = ax2 if ax2 else ax1
     ax.text(0.95, -0.05, f'Greater in {group1}', color=color_pos, ha='right', va='top', transform=ax.transAxes, fontsize=10, clip_on=False)

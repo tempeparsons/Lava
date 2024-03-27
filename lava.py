@@ -31,7 +31,7 @@ FILE_EXTS_TXT = ('.txt',)
 FILE_EXTS_CSV = ('.csv','.tsv')
 
 DEFALUT_FC = 2.0
-DEFALUT_MAXP  = 5.00
+DEFALUT_MAXP  = 0.05
 DEFAULT_POS_COLOR = '#D00000'
 DEFAULT_NEG_COLOR = '#0080FF'
 DEFAULT_LOW_COLOR = '#A0A000'
@@ -528,7 +528,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
          idx_cols=None, ref_groups=None, markers=None, col_groups=None, min_peps=DEFAULT_MIN_PEPS, pep_col=None,
          take_descripts=False, label_cols=None, extra_cols=None, remove_contaminents=True,  f_thresh=DEFALUT_FC,
          p_thresh=DEFALUT_MAXP, quiet=False, colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
-         split_x=False, hit_labels=False, hq_only=False, znorm_fc=False, quant_scale=False):
+         split_x=False, hit_labels=False, hq_only=False, znorm_fc=False, quant_scale=False, do_pp=True):
     
     in_path = _check_path(in_path, should_exist=True)
     exp_path = _check_path(exp_path, should_exist=True)
@@ -552,7 +552,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
                      ('Table output file', table_path),
                      ('Input software', software),
                      ('Min. fold-change', 2.0 ** f_thresh),
-                     ('Max. p-value', f'{p_thresh:.2f}%'),
+                     ('Max. p-value', p_thresh),
                      ('Remove contaminents', remove_contaminents),
                      ('Split volcano X-axis', split_x),
                      ('Show hit labels', hit_labels),
@@ -1179,12 +1179,12 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
                       colors, quant_scale, split_x, hq_only, hit_labels, markers, lw=0.25, ls='--',
                       marker_text_col=None)
     
-    #if len(pairs) > 1:
-    #    for i, pair1 in enumerate(pairs[:-1]):
-    #        key1 = ':::'.join(pair1)
-    #        for pair2 in pairs[i+1:]:
-    #            key2 = ':::'.join(pair2)
-    #            plots.pp_plot(pdf, pair1, plotdict[key1], pair2, plotdict[key2])
+    if do_pp and len(pairs) > 1:
+        for i, pair1 in enumerate(pairs[:-1]):
+            key1 = ':::'.join(pair1)
+            for pair2 in pairs[i+1:]:
+                key2 = ':::'.join(pair2)
+                plots.pp_plot(pdf, pair1, plotdict[key1], pair2, plotdict[key2], p_thresh, f_thresh, min_peps)
         
     if table_path:
         save_volcano_table(pairs, plotdict, table_path, f_thresh, p_thresh, min_peps)
@@ -1284,6 +1284,9 @@ def main(argv=None):
     arg_parse.add_argument('-x', '--extra-columns', dest="x", nargs='+', default=None,
                            help='Extra column names from the input to carry across (unchanged) to the output tables')
 
+    arg_parse.add_argument('-pp', '--pvalue-dual', dest="pp", action='store_true',
+                           help='When two or more separate comparisons are done, create plots for p-values from different sources.')
+
     arg_parse.add_argument('-qs', '--quantile-scaling', dest="qs", action='store_true',
                            help='Use quantile scaling of abundance to determine spot size in the volcno plots, otherwise the (maximum) mean abundance is used directly.')
                            
@@ -1297,7 +1300,7 @@ def main(argv=None):
                            help=f'Minimum fold change for potentially significant hits. Default: {DEFALUT_FC}')
    
     arg_parse.add_argument('-p', '--max-p-value', dest="p", metavar='MAX_PVALUE', type=float, default=DEFALUT_MAXP,
-                           help=f'Maximum threshold p-value (as a percentage) for selecting significant hits. Default: {DEFALUT_MAXP}')
+                           help=f'Maximum threshold p-value for selecting significant hits. Default: {DEFALUT_MAXP}')
     
     arg_parse.add_argument('--pos-color', dest="pos-color", metavar='COLOR', default=DEFAULT_POS_COLOR,
                            help=f'Optional color specification (used by matplotlib) for positive hits on volcano plots, e.g. "blue" or "#0000FF". Default: {DEFAULT_POS_COLOR}')
@@ -1345,6 +1348,7 @@ def main(argv=None):
     take_descripts = args['d']
     label_cols = args['l']
     extra_cols = args['x']
+    do_pp = args['pp']
     
     split_x = args['xs']
     
@@ -1383,8 +1387,8 @@ def main(argv=None):
     
     f_thresh = np.log2(f_thresh)   
         
-    if p_thresh > 50.0:
-        fail('Maximum p-value threshold must be < 50.0')
+    if p_thresh > 0.5:
+        fail('Maximum p-value threshold must be < 0.5')
     
     if p_thresh < 0.0:
         fail('Maximum p-value threshold must be positive')
@@ -1396,7 +1400,7 @@ def main(argv=None):
     colors = (pos_color, low_color, neg_color)
 
     lava(in_path, exp_path, bg_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns, min_peps, pep_col, take_descripts,
-         label_cols, extra_cols, remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc, quant_scale)
+         label_cols, extra_cols, remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc, quant_scale, do_pp)
 
 
 if __name__ == '__main__':
