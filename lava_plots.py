@@ -240,6 +240,7 @@ def plot_pca(df, value_cols, group_cols, pdf, colors=['#D00000','#A0A000','#0080
     s_means = np.nanmean(data, axis=0)
     data = np.nan_to_num(data)
     data = data[data.sum(axis=1) > 0.0]
+    #data = data[np.count_nonzero(data, axis=1) == n_samples]
     
     for i in range(n_samples):
         z = data[:,i] == 0.0
@@ -785,9 +786,7 @@ def pp_plot(pdf, pair1, df1, pair2, df2, p_thresh, fc_thresh, min_peps, colors=[
         txt = ax.annotate(name, xy=(x, y), alpha=text_alpha, color=text_color, xytext=(xds, yds), fontsize=label_size,
                           textcoords='offset points', ha=ha, va=va, clip_on=False, zorder=zorder)
         txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF80')])
-    
-    ax.axhline(0.0, **hline_kw)
-    ax.axvline(0.0, **hline_kw)
+
     ax.axhline(nlp, **hline_kw)
     ax.axvline(nlp, **hline_kw)
     ax.axhline(-nlp, **hline_kw)
@@ -825,13 +824,17 @@ def pp_plot(pdf, pair1, df1, pair2, df2, p_thresh, fc_thresh, min_peps, colors=[
     ax.set_xticks(tpos)
     ax.set_xticklabels(ticks, fontsize=8)
     
+    texts = [f'{a1} > {a2}', f'{a2} > {a1}', f'{b1} > {b2}', f'{b2} > {b1}']
+    max_len = max([len(x) for x in texts])
+    fontsize = min(14, 280.0/max_len)
+    
     # X    
-    ax.text(1.0, -0.04, f'{a1} > {a2}', ha='right', va='top', color=cmap(1.0), transform=ax.transAxes, fontsize=14, clip_on=False)
-    ax.text(0.0, -0.04, f'{a2} > {a1}', ha='left',  va='top', color=cmap(0.0), transform=ax.transAxes, fontsize=14, clip_on=False)
+    ax.text(1.0, -0.04, f'{a1} > {a2}', ha='right', va='top', color=cmap(1.0), transform=ax.transAxes, fontsize=fontsize, clip_on=False)
+    ax.text(0.0, -0.04, f'{a2} > {a1}', ha='left',  va='top', color=cmap(0.0), transform=ax.transAxes, fontsize=fontsize, clip_on=False)
     
     # Y
-    ax.text(-0.065, 1.0, f'{b1} > {b2}', ha='right', va='top', rotation=90, color=cmap(1.0), transform=ax.transAxes, fontsize=14, clip_on=False)
-    ax.text(-0.065, 0.0, f'{b2} > {b1}', ha='right',  va='bottom', rotation=90, color=cmap(0.0), transform=ax.transAxes, fontsize=14, clip_on=False)
+    ax.text(-0.065, 1.0, f'{b1} > {b2}', ha='right', va='top', rotation=90, color=cmap(1.0), transform=ax.transAxes, fontsize=fontsize, clip_on=False)
+    ax.text(-0.065, 0.0, f'{b2} > {b1}', ha='right',  va='bottom', rotation=90, color=cmap(0.0), transform=ax.transAxes, fontsize=fontsize, clip_on=False)
     
     xtlos = ax.get_xticklabels()
     ytlos = ax.get_yticklabels()
