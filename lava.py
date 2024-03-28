@@ -543,8 +543,10 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
     
     info(f'Lava version {VERSION}')    
     
+    cmd_args = [f'"{x}"' if ' ' in x else x for x in sys.argv[1:]]
+    
     option_report = [(f'Lava Report version {VERSION}', None),
-                     ('Input options', ' '.join(sys.argv[1:])),
+                     ('Input options', ' '.join(cmd_args)),
                      ('Input data file', in_path),
                      ('Exp. design file', exp_path),
                      ('Background file', bg_path),
