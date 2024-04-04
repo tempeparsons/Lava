@@ -26,18 +26,18 @@ def remove_rows(df, grpsize1, grpsize2):
     # Remove if up to half missing on both sides
     thresh1 =  float(grpsize1 / 2)
     thresh2 =  float(grpsize2 / 2)
-   
+    
     # Drop if less than half on both sides: 2/4 both sides is borderline and kept
-    df = df.drop(df[(df.iloc[:,-1] <= thresh1) & (df.iloc[:,-2] < thresh2)].index)
-    df = df.drop(df[(df.iloc[:,-1] < thresh1) & (df.iloc[:,-2] <= thresh2)].index)
+    df = df.drop(df[(df['nobs_grp1'] <= thresh1) & (df['nobs_grp2'] < thresh2)].index)
+    df = df.drop(df[(df['nobs_grp1'] < thresh1)  & (df['nobs_grp2'] <= thresh2)].index)
     
     # Need at least 3 on one side to compare a singlular val
-    df = df.drop(df[(df.iloc[:,-1] < 3) & (df.iloc[:,-2] == 1)].index)
-    df = df.drop(df[(df.iloc[:,-1] == 1) & (df.iloc[:,-2] < 3)].index)
+    df = df.drop(df[(df['nobs_grp1'] < 3) &  (df['nobs_grp2'] == 1)].index)
+    df = df.drop(df[(df['nobs_grp1'] == 1) & (df['nobs_grp2'] < 3)].index)
 
     # Can only have one missing and at least 3 if other size all zeros
-    df = df.drop(df[(df.iloc[:,-1] < max(grpsize1-1, 3)) & (df.iloc[:,-2] == 0)].index)
-    df = df.drop(df[(df.iloc[:,-1] == 0) & (df.iloc[:,-2] < max(grpsize2-1, 3))].index)
+    df = df.drop(df[(df['nobs_grp1'] < max(grpsize1-1, 3)) & (df['nobs_grp2'] == 0)].index)
+    df = df.drop(df[(df['nobs_grp1'] == 0) & (df['nobs_grp2'] < max(grpsize2-1, 3))].index)
     
     # Any pure zeros are real zeros not NaN
     #df.loc[df[cols[-2]] == 0, cols[:grpsize1]] = [0] * grpsize1
