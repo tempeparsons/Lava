@@ -762,6 +762,7 @@ def pp_plot(pdf, pair1, df1, pair2, df2, p_thresh, fc_thresh, min_peps, colors=[
         if not dual[i]:
             name = name + '$^{!}$'
             text_color = '#800080'
+            text_alpha = 0.5
             zorder = 2
           
         elif has_zeros[i]:
