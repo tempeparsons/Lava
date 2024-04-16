@@ -313,6 +313,31 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
            info(f'Saved table to {file_path}')
 
 
+def _read_label_file(label_path):
+
+    import csv
+    
+    if '\t' in open(label_path).read():
+        delimiter = '\t'
+    else:
+        delimiter = ','
+    
+    label_dict = {}
+    with open(label_path, newline='') as file_obj:
+        for row in csv.reader(file_obj, delimiter=delimiter):
+            if not row:
+                continue
+            
+            prot_ids, label = row[:2]
+            label = label.strip()
+            
+            for prot_id in prot_ids.split(';'):
+                prot_id = prot_id.strip()
+                label_dict[prot_id] = label
+            
+    return label_dict
+
+
 def _read_bg_file(df, bg_path, group_dicts, bg_groups):
 
     import csv
@@ -526,8 +551,8 @@ def _check_path(file_path, should_exist=True):
     
 def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_path=None, table_path=None,
          idx_cols=None, ref_groups=None, markers=None, col_groups=None, min_peps=DEFAULT_MIN_PEPS, pep_col=None,
-         take_descripts=False, label_cols=None, extra_cols=None, remove_contaminents=True,  f_thresh=DEFALUT_FC,
-         p_thresh=DEFALUT_MAXP, quiet=False, colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
+         take_descripts=False, label_file=None, label_cols=None, extra_cols=None, remove_contaminents=True, 
+         f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP, quiet=False, colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
          split_x=False, hit_labels=False, hq_only=False, znorm_fc=False, quant_scale=False, do_pp=True):
     
     in_path = _check_path(in_path, should_exist=True)
@@ -549,7 +574,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
                      ('Input options', ' '.join(cmd_args)),
                      ('Input data file', in_path),
                      ('Exp. design file', exp_path),
-                     ('Background file', bg_path),
+                     ('Background file', bg_path or ''),
                      ('PDF output file', pdf_path),
                      ('Table output file', table_path),
                      ('Input software', software),
@@ -581,6 +606,11 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         bg_dict = _read_bg_file(df, bg_path, group_dicts, bg_groups)
     else:
         bg_dict = {}
+
+    if label_file:
+        label_dict = _read_label_file(label_file)
+    else:
+        label_dict = {}
     
     # Remove any non-comparison groups, e.g. backgrounds
         
@@ -628,7 +658,26 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
 
     option_report.append(('Keep descriptions', take_descripts))
     
-    if label_cols:
+    if label_dict:
+        idx = list(df[idx_cols[0]])
+        n_missing = 0
+        labels = []
+        
+        for i, x in enumerate(idx):
+            if x in label_dict:
+                label = label_dict[x]
+            else:
+                n_missing += 1
+                label = x
+                
+            labels.append(label)
+       
+        if n_missing:
+            warn(f'A total of {n_missing:,} rows were missing labels in file {label_file}')
+        
+        label_cols = [f'From file "label_file"']
+        
+    elif label_cols:
         label_cols = _check_cols(df, label_cols)
         info(f'Specified label columns ' + '+'.join(label_cols))
     
@@ -637,7 +686,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         else:
             vals = [[str(x) for x in df[col]] for col in label_cols]
             labels = [':'.join(x) for x in zip(*vals)]
-    
+        
     else:
         if 'Gene Symbol' in df:
             labels = list(df['Gene Symbol'])
@@ -650,10 +699,10 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
                     gene_names.append(df[idx_cols[0]][i])
                     continue
  
-                gene_name = re.findall('GN=(\w+)', head)
+                gene_name = re.findall('GN=(\S+)', head)
  
                 if not gene_name:
-                  gene_name = re.findall('\|(\w+)\|', head)
+                    gene_name = re.findall('\|(\w+)\|', head)
  
                 if gene_name:
                     gene_names.append(';'.join(sorted(set(gene_name))))
@@ -669,7 +718,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
  
             for i, desc in enumerate(df['Description']):
                 gene_name = []
-                match = re.search('GN=(\w+)', desc)
+                match = re.search('GN=(\S+)', desc)
  
                 if match:
                     gene_name = match.group(1)
@@ -684,7 +733,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         else:
             for col in DEFAULT_INDEX_COLS:
                 if col in df:
-                    df['labels'] = list(df[col])
+                    break
                 
             else:
                 col = idx_cols[0] 
@@ -701,6 +750,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         extra_cols = []
     
     option_report.append(('Label column', '+'.join(label_cols)))
+    option_report.append(('Label file', label_file or ''))
     option_report.append(('Peptide column', pep_col or ''))
     option_report.append(('Min hit peptides', min_peps))
     
@@ -873,12 +923,14 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
 
     culled_rows = pre_cull[0] - post_cull[0]
     info(f'Removed {culled_rows} contaminant rows from {pre_cull[0]}, total')
+    option_report.append((f'Input rows', pre_cull[0]))
     option_report.append((f'Contaminent rows', culled_rows))
+    option_report.append((f'Useful rows', post_cull[0]))
     
     if pep_col and min_peps > 1:
        n1 = df.shape[0]
        nlow = np.count_nonzero(df[pep_col] < min_peps)
-       info(f'Found {nlow} low peptide (<{min_peps}) rows from {n1,} total')
+       info(f'Found {nlow} low peptide (<{min_peps}) rows from {n1:,} total')
        option_report.append((f'Low peptide rows', nlow))
        
     if not quiet:
@@ -1184,7 +1236,13 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
     if do_pp and len(pairs) > 1:
         for i, pair1 in enumerate(pairs[:-1]):
             key1 = ':::'.join(pair1)
+            s1 = set(pair1)
             for pair2 in pairs[i+1:]:
+                s2 = set(pair2)
+                
+                if len(pairs) > 2  and (not s1 & s2):
+                  continue
+                
                 key2 = ':::'.join(pair2)
                 plots.pp_plot(pdf, pair1, plotdict[key1], pair2, plotdict[key2], p_thresh, f_thresh, min_peps)
         
@@ -1229,7 +1287,7 @@ def main(argv=None):
     arg_parse.add_argument('-b', '--background-table', dest="b", metavar='FILE_PATH', default=None, 
                            help='A file specifying background "subtractions" to perform; so comparisons can be made relative to a set of background data, which may differ for different conditions. ' \
                                 'This file is a comma- or tab-separated table with two columns that pair each experimental group (to be analysed) with it\'s ' \
-                                'background group. For both columns, group names must reger to groups in the experimental design table.')
+                                'background group. For both columns, group names must refer to groups in the experimental design table.')
    
     arg_parse.add_argument('-s', '--software', dest="s", metavar='SOFTWARE', default=DEFAULT_SOFTWARE,
                            help=f"The name of the software used to process the data present in the input file. Available choices: {', '.join(VALID_SOFTWARE)}. Deafult: {DEFAULT_SOFTWARE}")
@@ -1282,6 +1340,12 @@ def main(argv=None):
 
     arg_parse.add_argument('-l', '--label-columns', dest="l", nargs='+', default=None,
                            help='The column names from the input to use as labels for data points; defaults to use gene names, if available, or else protein IDs')
+
+    arg_parse.add_argument('-lf', '--label-file', dest="lf", default=None,
+                           help="A separate file from which to take protein/row labels, i.e. where the main input file doesn't contain an appropriate label column. " \
+                                "This file should be a comma- or tab-separated text file with two columns; the first column contains one or more IDs, delimited by semicolons, " \
+                                "(typically protein accessions or unique identifiers to index data rows) " \
+                                "and the second column giving a label that maps to those IDs. Using this option overrides the -l option.")
 
     arg_parse.add_argument('-x', '--extra-columns', dest="x", nargs='+', default=None,
                            help='Extra column names from the input to carry across (unchanged) to the output tables')
@@ -1349,6 +1413,7 @@ def main(argv=None):
     quant_scale = args['qs']
     take_descripts = args['d']
     label_cols = args['l']
+    label_file = args['lf']
     extra_cols = args['x']
     do_pp = args['pp']
     
@@ -1384,6 +1449,10 @@ def main(argv=None):
         else:
             warn('No data colums specified; user will be prompted')
     
+    if label_file and label_cols:
+        warn('Both "-lf" (label file) and "-l" (label column) options were specified; the latter will be ignored.')
+        label_cols = None
+    
     if f_thresh <= 1.0:
         fail('Minimum fold change threshold (-f) must be greeater than 1.0')
     
@@ -1401,13 +1470,21 @@ def main(argv=None):
     
     colors = (pos_color, low_color, neg_color)
 
-    lava(in_path, exp_path, bg_path, software, pdf_path, table_path, idx_cols, ref_groups, markers, columns, min_peps, pep_col, take_descripts,
-         label_cols, extra_cols, remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x, hit_labels, hq_only, znorm_fc, quant_scale, do_pp)
+    lava(in_path, exp_path, bg_path, software, pdf_path, table_path, idx_cols, ref_groups, markers,
+         columns, min_peps, pep_col, take_descripts, label_file, label_cols, extra_cols,
+         remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x,
+         hit_labels, hq_only, znorm_fc, quant_scale, do_pp)
 
 
 if __name__ == '__main__':
     
     main()
+    
+    
+# Add total rows
+# Fix BG file heading
+# Add labels file
+    
     
 """
 
@@ -1432,7 +1509,17 @@ python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadin
 python3 lava.py test/Nadine_LVA/1338115639_Nadine_DDA_re_Proteins.txt -e test/Nadine_LVA/exp_design_lva_dda.csv -g test/Nadine_LVA/Nadine_LVA_DDA_lava05_znorm.pdf -z -o test/Nadine_LVA/Nadine_DDA_LVA_lava05_znorm.xlsx -r CNT -f 10 -p 5 -nc "Number of Peptides by Search Engine Sequest HT"
 
 python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_3.csv -b test/20231210_Rab1b_T72_mutant/exp_bg_3.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lavaTEST_znorm.pdf -nc "Number of Peptides by Search Engine CHIMERYS" -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lavaTEST_znorm.xlsx -f 10 -p 0.5 
+    
+
+python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DDA_SCX_Proteins.txt   -e test/Alex_Rab1AB/expd_DDA_2.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DDA_Lava02a.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DDA_Lava02a.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp
+python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DIA_SCX-1_Proteins.txt -e test/Alex_Rab1AB/expd_DIA_2.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava02a.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava02a.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp
+python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DDA_SCX_Proteins.txt   -e test/Alex_Rab1AB/expd_DDA_3.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DDA_Lava02b.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DDA_Lava02b.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp
+python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DIA_SCX-1_Proteins.txt -e test/Alex_Rab1AB/expd_DIA_3.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava02b.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava02b.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp
+python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DDA_SCX_Proteins.txt   -e test/Alex_Rab1AB/expd_DDA_1.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DDA_Lava02.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DDA_Lava02.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp
+python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DIA_SCX-1_Proteins.txt -e test/Alex_Rab1AB/expd_DIA_1.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava02.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava02.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp
+
+python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DIA_SCX-1_Proteins.txt -e test/Alex_Rab1AB/expd_DIA_1comb.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava03.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava03.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp -r Ctrl
 
 """
-    
+
 
