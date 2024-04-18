@@ -276,7 +276,7 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
                
                in_colsA = [x for x in list(df.columns) if x.startswith('inA_') or x.startswith('npepA_')]
                in_colsB = [x for x in list(df.columns) if x.startswith('inB_') or x.startswith('npepB_')]
-               sheet_name=key.replace(':::', '_vs_')
+               sheet_name=key.replace(':::', '_v_')[:31]
                
                if 'npeps' in df:
                    df.style.apply(grp1_col_bg, axis=1, subset=in_colsA)\
@@ -1476,50 +1476,9 @@ def main(argv=None):
          hit_labels, hq_only, znorm_fc, quant_scale, do_pp)
 
 
+# Excel sheet name 31 char limit
+
 if __name__ == '__main__':
     
     main()
     
-    
-# Add total rows
-# Fix BG file heading
-# Add labels file
-    
-    
-"""
-
-Take labels from dual keys; exp_design can omit
-
-Example: 
-python3 lava.py VolcCLI_PD1.xlsx -o VolcCLI_PD1_out.xlsx -g VolcCLI_PD1.pdf -e groups_example.txt -l -r A -m P00918
-
-python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava01.pdf -o test/Nadine_LVA/Nadine_LVA_lava.xlsx -r CNT -f 10 -p 0.5 -i "Gene Symbol"
-python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava03.pdf -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava.xlsx -r WT -f 10 -p 0.5 -i "Gene Symbol"
-
-python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05_znorm.pdf -nc "Number of Peptides by Search Engine CHIMERYS" -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05_znorm.xlsx -r WT -f 10 -p 0.5 -i "Gene Symbol"
-
-python3 lava.py test/111120_IC/111120_EV_Fraction_IC.xlsx -e test/111120_IC/exptdesign.txt -g test/111120_IC/111120_IC_plotsZ01.pdf -o test/111120_IC/111120_IC_plotdataZ01.xlsx -f 6.0 -z
-
-python3 lava.py test/lakatos/Lakatos_protein_named.csv -e test/lakatos/exdes_ALSinten.txt -z -o test/lakatos/lakatos_03.xlsx -g test/lakatos/lakaos03.pdf
-
-python3 lava.py test/mq/proteinGroups_originaldata.txt -e test/mq/expd.tsv -z -o test/mq/lakatos_01.xlsx -g test/mq/lakaos_01.pdf -s MQ -nc Peptides
-python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_1.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05b_znorm.pdf -nc "Number of Peptides by Search Engine CHIMERYS" -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lava05b_znorm.xlsx -r WT -f 10 -p 0.5 
-python3 lava.py test/Nadine_LVA/1338115639_Nadine_DIA_Proteins.txt -e test/Nadine_LVA/exp_design3.csv -g test/Nadine_LVA/Nadine_LVA_lava04_znorm.pdf -z -o test/Nadine_LVA/Nadine_LVA_lava04_znorm.xlsx -r CNT -f 10 -p 5 -nc "Number of Peptides by Search Engine CHIMERYS"
-
-python3 lava.py test/Nadine_LVA/1338115639_Nadine_DDA_re_Proteins.txt -e test/Nadine_LVA/exp_design_lva_dda.csv -g test/Nadine_LVA/Nadine_LVA_DDA_lava05_znorm.pdf -z -o test/Nadine_LVA/Nadine_DDA_LVA_lava05_znorm.xlsx -r CNT -f 10 -p 5 -nc "Number of Peptides by Search Engine Sequest HT"
-
-python3 lava.py test/20231210_Rab1b_T72_mutant/1344621975_DIA-\(2\)_Proteins.txt -e test/20231210_Rab1b_T72_mutant/exp_design_3.csv -b test/20231210_Rab1b_T72_mutant/exp_bg_3.csv -g test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lavaTEST_znorm.pdf -nc "Number of Peptides by Search Engine CHIMERYS" -z -o test/20231210_Rab1b_T72_mutant/Rab1b_T72_mutant_lavaTEST_znorm.xlsx -f 10 -p 0.5 
-    
-
-python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DDA_SCX_Proteins.txt   -e test/Alex_Rab1AB/expd_DDA_2.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DDA_Lava02a.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DDA_Lava02a.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp
-python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DIA_SCX-1_Proteins.txt -e test/Alex_Rab1AB/expd_DIA_2.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava02a.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava02a.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp
-python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DDA_SCX_Proteins.txt   -e test/Alex_Rab1AB/expd_DDA_3.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DDA_Lava02b.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DDA_Lava02b.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp
-python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DIA_SCX-1_Proteins.txt -e test/Alex_Rab1AB/expd_DIA_3.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava02b.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava02b.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp
-python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DDA_SCX_Proteins.txt   -e test/Alex_Rab1AB/expd_DDA_1.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DDA_Lava02.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DDA_Lava02.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp
-python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DIA_SCX-1_Proteins.txt -e test/Alex_Rab1AB/expd_DIA_1.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava02.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava02.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp
-
-python3 lava.py test/Alex_Rab1AB/1390176892_Alex_DIA_SCX-1_Proteins.txt -e test/Alex_Rab1AB/expd_DIA_1comb.csv -g test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava03.pdf -z -o test/Alex_Rab1AB/Rab1AB_Alex_DIA_Lava03.xlsx -f 10 -p 0.05 -nc "Number of Unique Peptides" -pp -r Ctrl
-
-"""
-
-
