@@ -199,16 +199,16 @@ def plot_dual_pca(df, value_cols, norm_cols, group_cols, pdf, colors=['#D00000',
         ax1.scatter([], [], s=size, color=grp_colors[group], label=group)
     
     for i, col in enumerate(value_cols):
-        txt = ax1.annotate(col, xy=(x_vals[i], y_vals[i]), xytext=(5, 5), fontsize=8, alpha=0.5,
+        txt = ax1.annotate(col, xy=(x_vals[i], y_vals[i]), xytext=(5, 5), fontsize=5, alpha=0.5,
                            ha='left', va='top', textcoords='offset points', clip_on=False)
         txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
-        txt = ax2.annotate(col, xy=(x_zvals[i], y_zvals[i]), xytext=(5, 5), fontsize=8, alpha=0.5,
+        txt = ax2.annotate(col, xy=(x_zvals[i], y_zvals[i]), xytext=(5, 5), fontsize=5, alpha=0.5,
                            ha='left', va='top', textcoords='offset points', clip_on=False)
         txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
 
     plt.subplots_adjust(wspace=0.25, top=0.90, bottom=0.15, left=0.10, right=0.95)    
     
-    ax1.legend(fontsize=8) # , bbox_to_anchor=(1.04, 1), loc='upper left', )
+    ax1.legend(fontsize=5) # , bbox_to_anchor=(1.04, 1), loc='upper left', )
 
     _watermark(fig)
     
@@ -277,13 +277,13 @@ def plot_pca(df, value_cols, group_cols, pdf, colors=['#D00000','#A0A000','#0080
         ax1.scatter([], [], s=size, color=grp_colors[group], label=group)
     
     for i, col in enumerate(cols):
-        txt = ax1.annotate(col, xy=(x_vals[i], y_vals[i]), xytext=(5, 5), fontsize=8, alpha=0.5,
+        txt = ax1.annotate(col, xy=(x_vals[i], y_vals[i]), xytext=(5, 5), fontsize=7, alpha=0.5,
                            ha='left', va='top', textcoords='offset points', clip_on=False)
         txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='#FFFFFF')])
 
     plt.subplots_adjust(hspace=0.25, top=0.90, bottom=0.1, left=0.10, right=0.8)    
     
-    ax1.legend(fontsize=8, bbox_to_anchor=(1.04, 1), loc='upper left', )
+    ax1.legend(fontsize=7, bbox_to_anchor=(1.04, 1), loc='upper left', )
 
     _watermark(fig)
     
@@ -336,8 +336,8 @@ def plot_norm(df, value_cols, norm_cols, pdf, colors=['#D00000','#A0A000','#0080
     ax2.set_xlabel('Probability density', fontsize=9)
     ax2.set_xlabel('Norm. $log_2$(abundance)', fontsize=9)
     
-    ax1.legend(fontsize=7)
-    ax2.legend(fontsize=7)
+    ax1.legend(fontsize=5)
+    ax2.legend(fontsize=5)
     
     plt.subplots_adjust(wspace=0.05, top=0.92, bottom=0.12, left=0.10, right=0.95)    
     _watermark(fig)

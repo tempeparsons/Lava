@@ -347,9 +347,10 @@ def _read_bg_file(df, bg_path, group_dicts, bg_groups):
     else:
         delimiter = ','
     
-    group_names = set()
+    col_names = set()
     for group_dict in group_dicts:
-        group_names.update(group_dict.keys())
+        for group, cols in group_dict.items():
+            col_names.update(cols)
     
     bg_dict = {}
     with open(bg_path, newline='') as file_obj:
@@ -360,17 +361,17 @@ def _read_bg_file(df, bg_path, group_dicts, bg_groups):
             if row[0].startswith('#'):
                 continue
             
-            group_name, bg_name = row[:2]
+            col_name, bg_name = row[:2]
             
-            if group_name not in group_names:
-               group_str = ', '.join(sorted(group_names))
-               fail(f'Group name "{group_name}" from background file {bg_path} does not refer to a group in the experimental design. Valid groups: {group_str}')
+            if col_name not in col_names:
+               valid = ', '.join(sorted(col_names))
+               fail(f'Sample column name "{col_name}" from background file {bg_path} does not refer to a short name in the experimental design. Valid column names: {valid}')
             
             if bg_name not in bg_groups:
-               group_str = ', '.join(sorted(bg_groups))
-               fail(f'Background name "{bg_name}" from background file {bg_path} does not refer to a group in the experimental design. Valid background groups: {group_str}')
+               valid = ', '.join(sorted(bg_groups))
+               fail(f'Background name "{bg_name}" from background file {bg_path} does not refer to a group in the experimental design. Valid background groups: {valid}')
 
-            bg_dict[group_name] = bg_name
+            bg_dict[col_name] = bg_name
             
     return bg_dict
             
@@ -873,11 +874,8 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         if refs:
             non_ref = sorted(groups - ref_groups)
             for g1 in sorted(refs):
-                bg1 = f' (-{bg_dict[g1]})' if g1 in bg_dict else ''
-  
                 for g2 in non_ref:
-                    bg2 = f' (-{bg_dict[g2]})' if g2 in bg_dict else ''
-                    msg = f'{g1}{bg1}  vs  {g2}{bg2}'
+                    msg = f'{g1}  vs  {g2}'
                     info('   ' + msg)
                     pairs.append((g1, g2))
                     option_report.append((f'Pair {len(pairs)}', msg))
@@ -885,14 +883,20 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         else:
             groups = sorted(groups)
             for i, g1 in enumerate(groups[:-1]):
-                bg1 = f' (-{bg_dict[g1]})' if g1 in bg_dict else ''
                 for g2 in groups[i+1:]:
-                    bg2 = f' (-{bg_dict[g2]})' if g2 in bg_dict else ''
-                    msg = f'{g1}{bg1}  vs  {g2}{bg2}'
+                    msg = f'{g1}  vs  {g2}'
                     info('   ' + msg)
                     pairs.append((g1, g2))
                     option_report.append((f'Pair {len(pairs)}', msg))
-
+    
+    if bg_dict:
+         bgs = set(bg_dict.values())
+         info(f'The following background corrections will be employed:')
+         for bg in bgs:
+            col_names = [x for x in bg_dict if bg_dict[x] == bg]
+            col_names = ', '.join(col_names)
+            info(f'   With background {bg}: samples {col_names}')
+    
     pre_cull = df.shape
     
     if remove_contaminents and software in SOFT_DN:
@@ -1049,14 +1053,8 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
     overFCthresh = {}
     
     # Z normalise value distributions; used in T-test and optionally for fold-change
-    
-    col_bgs = {}
-    for grp, cols in group_cols.items():
-        if grp in bg_dict:
-           for col in cols:
-              col_bgs[col] = bg_dict[grp]
-    
-    norm_cols = util.make_znorm(df, value_cols, col_bgs, bg_groups) # Now keeps original cols, now only done once
+
+    norm_cols = util.make_znorm(df, value_cols, bg_dict, bg_groups) # Now keeps original cols, now only done once
 
     info('Plotting PCA')
     if bg_dict:
@@ -1285,9 +1283,9 @@ def main(argv=None):
                                 'A column wiith only a single group is assumed to contain a grouping of background data, as used with the -b option.')
 
     arg_parse.add_argument('-b', '--background-table', dest="b", metavar='FILE_PATH', default=None, 
-                           help='A file specifying background "subtractions" to perform; so comparisons can be made relative to a set of background data, which may differ for different conditions. ' \
-                                'This file is a comma- or tab-separated table with two columns that pair each experimental group (to be analysed) with it\'s ' \
-                                'background group. For both columns, group names must refer to groups in the experimental design table.')
+                           help='A file specifying background/baseline "subtractions" to perform; so comparisons can be made relative to a set of background data, which may differ for different conditions. ' \
+                                'This file is a comma- or tab-separated table with two columns that pair each experimental sample column (to be analysed) with it\'s ' \
+                                'background group. These names must be present in the experimental design table.')
    
     arg_parse.add_argument('-s', '--software', dest="s", metavar='SOFTWARE', default=DEFAULT_SOFTWARE,
                            help=f"The name of the software used to process the data present in the input file. Available choices: {', '.join(VALID_SOFTWARE)}. Deafult: {DEFAULT_SOFTWARE}")
