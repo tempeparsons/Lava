@@ -296,22 +296,22 @@ def plot_pca(df, value_cols, group_cols, pdf, colors=['#D00000','#A0A000','#0080
     
     
     
-def plot_norm(df, value_cols, norm_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], bin_size=1.0, alpha=0.7):
+def plot_norm(df, value_cols, norm_cols, pdf, colors=['#D00000','#A0A000','#0080FF'], bin_size=0.5, alpha=0.7):
 
     cmap = LinearSegmentedColormap.from_list('main', colors)
 
-    fig, (ax1, ax2) = plt.subplots(1,2, sharey=True, figsize=(8, 4))
+    fig, (ax1, ax2, ax3) = plt.subplots(1,3, sharey=True, figsize=(8, 4), gridspec_kw={'width_ratios': [3, 3, 1]})
     
     n = len(value_cols)
 
     all_vals = np.array(df[value_cols])
     min_val = int(10.0 * np.nanmin(all_vals)) * 0.1
-    max_val = int(10.0 * np.nanmax(all_vals) + 1.0) * 0.1
+    max_val = int(10.0 * np.nanmax(all_vals)) * 0.1
     bins = np.arange(min_val, max_val, bin_size)
 
     all_zvals = np.array(df[norm_cols])
     min_zval = int(10.0 * np.nanmin(all_zvals)) * 0.1
-    max_zval = int(10.0 * np.nanmax(all_zvals) + 1.0) * 0.1
+    max_zval = int(10.0 * np.nanmax(all_zvals)) * 0.1
     zbins = np.arange(min_zval, max_zval, bin_size)
     
     for i in range(n):
@@ -320,13 +320,14 @@ def plot_norm(df, value_cols, norm_cols, pdf, colors=['#D00000','#A0A000','#0080
        data = df[value_cols[i]]
        hist, edges = np.histogram(data[~np.isnan(data)], bins=bins, density=True)
        x_vals =  0.5 * (edges[:-1] + edges[1:])
-       ax1.plot(x_vals, hist, color=color, linewidth=0.50, alpha=alpha, label=value_cols[i])
+       ax1.plot(x_vals, hist, color=color, linewidth=0.50, alpha=alpha)
 
        data = df[norm_cols[i]]
        hist, edges = np.histogram(data[~np.isnan(data)], bins=zbins, density=True)
        x_vals =  0.5 * (edges[:-1] + edges[1:])
-       ax2.plot(x_vals, hist, color=color, linewidth=0.5, alpha=alpha, label=value_cols[i])
-    
+       ax2.plot(x_vals, hist, color=color, linewidth=0.5, alpha=alpha)
+       
+       ax3.plot([], color=color, linewidth=0.5, alpha=alpha, label=value_cols[i])
       
     ax1.set_title('Input values')
     ax1.set_xlabel('$log_2$(abundance)', fontsize=9)
@@ -336,8 +337,8 @@ def plot_norm(df, value_cols, norm_cols, pdf, colors=['#D00000','#A0A000','#0080
     ax2.set_xlabel('Probability density', fontsize=9)
     ax2.set_xlabel('Norm. $log_2$(abundance)', fontsize=9)
     
-    ax1.legend(fontsize=5)
-    ax2.legend(fontsize=5)
+    ax3.set_axis_off()
+    ax3.legend(fontsize=5)
     
     plt.subplots_adjust(wspace=0.05, top=0.92, bottom=0.12, left=0.10, right=0.95)    
     _watermark(fig)
@@ -491,7 +492,8 @@ def xy_plots(df, value_cols, ncols, pdf, colors=['#00FFFF','#0000FF','#000000','
     plt.close()
 
 
-def correlation_plot(df, value_cols, pdf, colors=['#00FFFF','#0000FF','#000000','#A00000','#FFFF00'], figsize=9.0, bg_color='#B0B0B0'):
+def correlation_plot(df, value_cols, pdf, colors=['#00FFFF','#0000FF','#000000','#A00000','#FFFF00'],
+                     figsize=9.0, bg_color='#B0B0B0', title='Sample correlation matrix'):
     
     cmap = LinearSegmentedColormap.from_list('gud', colors)
     
@@ -506,7 +508,7 @@ def correlation_plot(df, value_cols, pdf, colors=['#00FFFF','#0000FF','#000000',
     ax1 = fig.add_axes([0.85, 0.15, 0.10, 0.70])
     # Top Dendrogram
     ax2 = fig.add_axes([0.15, 0.85, 0.70, 0.10])
-    ax2.set_title('Sample correlation matrix')
+    ax2.set_title(title)
     # Colorbar
     ax3 = fig.add_axes([0.87, 0.85, 0.05, 0.10])
     
@@ -1075,7 +1077,7 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     for i, name in enumerate(names):
         size = sizes[i]
         low_qual = not high_qual[i]
-        color =  color=cmap(weights[i])
+        color = cmap(weights[i])
         ds = 0.5 * np.sqrt(size)
         x = fcvalues[i]
         y = pvalues[i]

@@ -87,6 +87,8 @@ def make_znorm(df, cols, bg_dict, bg_groups):
         
         if col in bg_dict:
             vals[nz] -= bg_data[bg_dict[col]][nz] # Adjust relative to background median
+            bg_col = 'bgcorr_' + col
+            df[bg_col] = vals
         
         nz_vals = vals[nz] # No zeros or nans
         meds.append(np.median(nz_vals))

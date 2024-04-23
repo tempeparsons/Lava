@@ -167,7 +167,7 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
            npeps = np.array(df['npeps'])
        else:
            npeps = np.full(n, min_peps)
-       
+
        cats = []
        cat_colors = []
        for i in range(n):
@@ -193,11 +193,12 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
            cat_colors.append(color)
            cats.append(klass)
        
-       df.rename(columns=nmap, inplace=True)
+       df = df.rename(columns=nmap)
+       #df.drop(nmap.keys(), axis=1)
        
        j = list(df.columns).index('labels') +1
        
-       fc = 2.0 ** (-lfc)
+       fc = 2.0 ** lfc
        df.insert(j, 'fold_change', fc)
        df.insert(j, 'hit_class', cats)
        
@@ -212,7 +213,6 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
        color_dict[key] = [cat_colors[i] for i in sort_idx]
        plotdict[key] = df.iloc[sort_idx]
        
-    
    def grp1_col_bg(vals):
    
      return ['background-color: #EEFFEE'] * len(vals)
@@ -270,10 +270,9 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
    if file_ext in FILE_EXTS_EXL:
        
        with pd.ExcelWriter(save_path, engine='xlsxwriter') as writer:
-           
            for key in keys:
                df = plotdict[key]
-               
+
                in_colsA = [x for x in list(df.columns) if x.startswith('inA_') or x.startswith('npepA_')]
                in_colsB = [x for x in list(df.columns) if x.startswith('inB_') or x.startswith('npepB_')]
                sheet_name=key.replace(':::', '_v_')[:31]
@@ -311,7 +310,7 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
            file_path = f'{path_root}_{name}{file_ext}'
            plotdict[key].to_csv(file_path, sep=',', na_rep='nan', quotechar='"')
            info(f'Saved table to {file_path}')
-
+    
 
 def _read_label_file(label_path):
 
@@ -554,7 +553,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
          idx_cols=None, ref_groups=None, markers=None, col_groups=None, min_peps=DEFAULT_MIN_PEPS, pep_col=None,
          take_descripts=False, label_file=None, label_cols=None, extra_cols=None, remove_contaminents=True, 
          f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP, quiet=False, colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
-         split_x=False, hit_labels=False, hq_only=False, znorm_fc=False, quant_scale=False, do_pp=True):
+         split_x=False, hit_labels=False, hq_only=False, znorm_fc=False, quant_scale=False, do_pp=True, intermed_out=False):
     
     in_path = _check_path(in_path, should_exist=True)
     exp_path = _check_path(exp_path, should_exist=True)
@@ -1040,10 +1039,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
 
     info('Plotting correlations')
     plots.correlation_plot(df, value_cols, pdf)
-    
-    #info('Plotting PCA')
-    #plots.plot_pca(df, value_cols, group_cols, pdf)
-    
+
     # pair scatters
     ncols = 4
     info('Plotting comparisons')
@@ -1055,7 +1051,11 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
     # Z normalise value distributions; used in T-test and optionally for fold-change
 
     norm_cols = util.make_znorm(df, value_cols, bg_dict, bg_groups) # Now keeps original cols, now only done once
-
+    
+    if bg_dict:
+        info('Plotting corrected correlations')
+        plots.correlation_plot(df, norm_cols, pdf, title="Corrected sample correlation matrix")
+        
     info('Plotting PCA')
     if bg_dict:
         plots.plot_dual_pca(df, value_cols, norm_cols, group_cols, pdf)    
@@ -1078,15 +1078,29 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         zgrp2 = ['znorm_' + x for x in grp2]
         
         df2 = df[grp1+grp2+zgrp1+zgrp2].copy()
-        
+                
         # Add labels and original, untransformed data to output
         df2['labels'] = orig_df['labels']
         
         for col1 in grp1:
             df2['inA_' + col1] = orig_df[col1]
+            
+            if intermed_out:
+                df2['log2_A_' + col1] = df[ col1]
+                df2['normA_' + col1] = df['znorm_' + col1]
+ 
+                if bg_cols:
+                    df2['corrA_' + col1] = df['bgcorr_' +col1]
 
         for col2 in grp2:
             df2['inB_' + col2] = orig_df[col2]
+ 
+            if intermed_out:
+                df2['log2_B_' + col2] = df[ col2]
+                df2['normB_' + col2] = df['znorm_' + col2]
+
+                if bg_cols:
+                    df2['corrB_' + col2] = df['bgcorr_' + col2]
         
         if extra_id_col:
             df2['protein_id'] = orig_df[extra_id_col]
@@ -1106,7 +1120,6 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         azeros2 = df2['nobs_grp2'] == 0
         singles1 = df2['nobs_grp1'] == 1
         singles2 = df2['nobs_grp2'] == 1
-        
         
         # Any pure zeros are real zeros not NaN; set before taking means
         df2.loc[azeros1, grp1] = 0
@@ -1139,7 +1152,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
             df2['grp1grp2_FC'] = df2['zmean_grp1'] - df2['zmean_grp2']
         else:
             df2['grp1grp2_FC'] = df2['mean_grp1'] - df2['mean_grp2']          
-        
+       
         # Get Z-normed params for T-test 
         df2['zstd_grp1'] = df2.loc[:,zgrp1].std(axis=1, ddof=1)
         df2['zstd_grp2'] = df2.loc[:,zgrp2].std(axis=1, ddof=1)
@@ -1148,7 +1161,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         
         #q95grp1 = df2.zstd_grp1.quantile(q=0.95)
         #q95grp2 = df2.zstd_grp2.quantile(q=0.95)
-         
+        
         # Current heristic is to average the other side with a quantile STD replacement
         zstds1 = 0.5 * (df2.zstd_grp1.quantile(q=0.75) + df2['zstd_grp2'])
         zstds2 = 0.5 * (df2.zstd_grp2.quantile(q=0.75) + df2['zstd_grp1'])
@@ -1168,7 +1181,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         
         df2 = util.ttest_from_stats_eqvar(df2)
         df2 = df2.drop(columns = zgrp1 + zgrp2 + grp1 + grp2)
-        
+       
         col_selection = ['protein_id'] if extra_id_col else []
         
         if 'description' in orig_df:
@@ -1178,13 +1191,24 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         # Reorder
         col_selection += ['labels','grp1grp2_FC', 'pvals', 'Tpvals', 'nobs_grp1', 'nobs_grp2',
                           'mean_grp1', 'mean_grp2', 'zmean_grp1', 'zmean_grp2', 'zstd_grp1', 'zstd_grp2']
-         
+             
         if pep_col:
             col_selection.append('npeps')
          
         # Orig data last
         col_selection += [c for c in df2.columns if c.startswith('inA_')]
         col_selection += [c for c in df2.columns if c.startswith('inB_')]
+        
+        if intermed_out:
+             col_selection += [c for c in df2.columns if c.startswith('log2_A_')]
+             col_selection += [c for c in df2.columns if c.startswith('log2_B_')]
+ 
+             if bg_cols:
+                 col_selection += [c for c in df2.columns if c.startswith('corrA_')]
+                 col_selection += [c for c in df2.columns if c.startswith('corrB_')]
+
+             col_selection += [c for c in df2.columns if c.startswith('normA_')]
+             col_selection += [c for c in df2.columns if c.startswith('normB_')]
         
         for col in extra_cols:
             df2[col] = orig_df[col]
@@ -1230,7 +1254,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         plots.volcano(pdf, pair_name, plotdict[pair_name], f_thresh, p_thresh, min_peps,
                       colors, quant_scale, split_x, hq_only, hit_labels, markers, lw=0.25, ls='--',
                       marker_text_col=None)
-    
+   
     if do_pp and len(pairs) > 1:
         for i, pair1 in enumerate(pairs[:-1]):
             key1 = ':::'.join(pair1)
@@ -1243,10 +1267,9 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
                 
                 key2 = ':::'.join(pair2)
                 plots.pp_plot(pdf, pair1, plotdict[key1], pair2, plotdict[key2], p_thresh, f_thresh, min_peps)
-        
+   
     if table_path:
         save_volcano_table(pairs, plotdict, table_path, f_thresh, p_thresh, min_peps)
-    
     
     if pdf:
         pdf.close()
@@ -1336,6 +1359,9 @@ def main(argv=None):
     arg_parse.add_argument('-d', '--descriptions', dest="d", action='store_true',
                            help=f"If present, cary over any protein description information (inc. from FASTA headers) to output tables.")
 
+    arg_parse.add_argument('-v', '--intermed-values-out', dest="v", action='store_true',
+                           help=f"If set, write all intermediate log-transformed values, normalized values etc. to output tables.")
+
     arg_parse.add_argument('-l', '--label-columns', dest="l", nargs='+', default=None,
                            help='The column names from the input to use as labels for data points; defaults to use gene names, if available, or else protein IDs')
 
@@ -1413,6 +1439,7 @@ def main(argv=None):
     label_cols = args['l']
     label_file = args['lf']
     extra_cols = args['x']
+    intermed_out = args['v']
     do_pp = args['pp']
     
     split_x = args['xs']
@@ -1471,7 +1498,7 @@ def main(argv=None):
     lava(in_path, exp_path, bg_path, software, pdf_path, table_path, idx_cols, ref_groups, markers,
          columns, min_peps, pep_col, take_descripts, label_file, label_cols, extra_cols,
          remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x,
-         hit_labels, hq_only, znorm_fc, quant_scale, do_pp)
+         hit_labels, hq_only, znorm_fc, quant_scale, do_pp, intermed_out)
 
 
 # Excel sheet name 31 char limit
