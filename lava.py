@@ -553,7 +553,8 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
          idx_cols=None, ref_groups=None, markers=None, col_groups=None, min_peps=DEFAULT_MIN_PEPS, pep_col=None,
          take_descripts=False, label_file=None, label_cols=None, extra_cols=None, remove_contaminents=True, 
          f_thresh=DEFALUT_FC, p_thresh=DEFALUT_MAXP, quiet=False, colors=(DEFAULT_POS_COLOR, DEFAULT_NEG_COLOR, DEFAULT_LOW_COLOR),
-         split_x=False, hit_labels=False, hq_only=False, znorm_fc=False, quant_scale=False, do_pp=True, intermed_out=False):
+         split_x=False, hit_labels=False, hq_only=False, znorm_fc=False, quant_scale=False, do_pp=True, do_ff=False,
+         intermed_out=False):
     
     in_path = _check_path(in_path, should_exist=True)
     exp_path = _check_path(exp_path, should_exist=True)
@@ -574,7 +575,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
                      ('Input options', ' '.join(cmd_args)),
                      ('Input data file', in_path),
                      ('Exp. design file', exp_path),
-                     ('Background file', bg_path or ''),
+                     ('Background file', bg_path or 'None specified'),
                      ('PDF output file', pdf_path),
                      ('Table output file', table_path),
                      ('Input software', software),
@@ -750,8 +751,8 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         extra_cols = []
     
     option_report.append(('Label column', '+'.join(label_cols)))
-    option_report.append(('Label file', label_file or ''))
-    option_report.append(('Peptide column', pep_col or ''))
+    option_report.append(('Label file', label_file or 'None specified'))
+    option_report.append(('Peptide column', pep_col or 'None specified'))
     option_report.append(('Min hit peptides', min_peps))
     
     # Descriptions
@@ -1255,7 +1256,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
                       colors, quant_scale, split_x, hq_only, hit_labels, markers, lw=0.25, ls='--',
                       marker_text_col=None)
    
-    if do_pp and len(pairs) > 1:
+    if (do_pp or do_ff) and len(pairs) > 1:
         for i, pair1 in enumerate(pairs[:-1]):
             key1 = ':::'.join(pair1)
             s1 = set(pair1)
@@ -1266,8 +1267,12 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
                   continue
                 
                 key2 = ':::'.join(pair2)
-                plots.pp_plot(pdf, pair1, plotdict[key1], pair2, plotdict[key2], p_thresh, f_thresh, min_peps)
-   
+
+                if do_pp:
+                    plots.dual_comparison_plot(pdf, pair1, plotdict[key1], pair2, plotdict[key2], p_thresh, f_thresh, min_peps)
+                if do_ff:
+                    plots.dual_comparison_plot(pdf, pair1, plotdict[key1], pair2, plotdict[key2], p_thresh, f_thresh, min_peps, is_pp=False)
+
     if table_path:
         save_volcano_table(pairs, plotdict, table_path, f_thresh, p_thresh, min_peps)
     
@@ -1375,7 +1380,10 @@ def main(argv=None):
                            help='Extra column names from the input to carry across (unchanged) to the output tables')
 
     arg_parse.add_argument('-pp', '--pvalue-dual', dest="pp", action='store_true',
-                           help='When two or more separate comparisons are done, create plots for p-values from different sources.')
+                           help='When two or more separate comparisons are done, create dual plots of p-values from different sources.')
+    
+    arg_parse.add_argument('-ff', '--fold0change-dual', dest="ff", action='store_true',
+                           help='When two or more separate comparisons are done, create dual plot of fold-changes from different sources.')
 
     arg_parse.add_argument('-qs', '--quantile-scaling', dest="qs", action='store_true',
                            help='Use quantile scaling of abundance to determine spot size in the volcno plots, otherwise the (maximum) mean abundance is used directly.')
@@ -1441,6 +1449,7 @@ def main(argv=None):
     extra_cols = args['x']
     intermed_out = args['v']
     do_pp = args['pp']
+    do_ff = args['ff']
     
     split_x = args['xs']
     
@@ -1498,7 +1507,7 @@ def main(argv=None):
     lava(in_path, exp_path, bg_path, software, pdf_path, table_path, idx_cols, ref_groups, markers,
          columns, min_peps, pep_col, take_descripts, label_file, label_cols, extra_cols,
          remove_contaminents, f_thresh, p_thresh, quiet, colors, split_x,
-         hit_labels, hq_only, znorm_fc, quant_scale, do_pp, intermed_out)
+         hit_labels, hq_only, znorm_fc, quant_scale, do_pp, do_ff, intermed_out)
 
 
 # Excel sheet name 31 char limit
