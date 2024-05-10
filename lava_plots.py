@@ -1052,6 +1052,8 @@ def dual_comparison_plot(pdf, pair1, df1, pair2, df2, p_thresh, fc_thresh, min_p
     ax.scatter([], [], s=2*min_size, color=cmap(0.5), label='insignificant')
     if min_peps > 1:
        ax.scatter([], [], s=2*min_size, color=lcolor, edgecolor='none', alpha=0.5, label='low pep count')
+    if markers:
+       ax.scatter([], [], s=2*min_size, color='k', marker='*', label='marker')
     ax.scatter([], [], s=32, marker="$X^!$", color='#800080', edgecolor='none', label='comparison missing')
     ax.scatter([], [], s=32, marker="$X^0$", color='#400040', edgecolor='none', label='vs all zeros')
     ax.scatter([], [], s=32, marker="$X^1$", color='#400040', edgecolor='none', label='vs single')
@@ -1445,7 +1447,7 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     if min_peps > 1:
        ax.scatter([], [], s=2*min_size, color=lcolor, edgecolor='none', alpha=0.5, label='low pep count')
     if markers:
-       ax.scatter([], [], s=2*min_size, color='k', label='marker')
+       ax.scatter([], [], s=2*min_size, color='k', marker='*', label='marker')
     ax.scatter([], [], s=32, marker="$X^0$", color='#400040', edgecolor='none', label='vs all zeros')
     ax.scatter([], [], s=32, marker="$X^1$", color='#400040', edgecolor='none', label='vs single')
               
