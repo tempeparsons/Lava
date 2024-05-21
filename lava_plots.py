@@ -878,7 +878,7 @@ def pp_plot(pdf, pair1, df1, pair2, df2, p_thresh, fc_thresh, min_peps, colors=[
     plt.close()
 
 
-def dual_comparison_plot(pdf, pair1, df1, pair2, df2, p_thresh, fc_thresh, min_peps, is_pp=True,
+def dual_comparison_plot(pdf, pair1, df1, pair2, df2, p_thresh, fc_thresh, min_peps, markers=None, is_pp=True,
                          colors=['#0080FF','#A0A000','#D00000'], max_size=160.0, min_size=8.0, label_size=5.0):
 
     # ? Add option to have these plots
@@ -959,8 +959,10 @@ def dual_comparison_plot(pdf, pair1, df1, pair2, df2, p_thresh, fc_thresh, min_p
     p_best = np.maximum(pvalues1, pvalues2) # neg logs; bigger better
     f_best = np.where(np.abs(fcvalues1) > np.abs(fcvalues2), fcvalues1, fcvalues2)
     
+    is_marker = np.array([x in set(markers) for x in names])
     is_hit = ((pvalues1 >= nlp) & (np.abs(fcvalues1) >= fc_thresh)) | ((pvalues2 >= nlp) & (np.abs(fcvalues2) >= fc_thresh)) 
-    
+    is_hit |= is_marker
+
     p_best /= p_best.max() # 0..1
     f_best /= np.abs(f_best).max() # 0..1
     
@@ -987,9 +989,9 @@ def dual_comparison_plot(pdf, pair1, df1, pair2, df2, p_thresh, fc_thresh, min_p
         y_values = fcvalues2
     
     s0 = (npeps < min_peps) & dual 
-    s1 = ~is_hit & ~s0 & dual
-    s2 = is_hit & ~s0 & dual
-    s3 = is_hit & ~s0 & ~dual
+    s1 = ~is_hit & ~s0 & dual & ~is_marker
+    s2 = is_hit & ~s0 & dual & ~is_marker
+    s3 = is_hit & ~s0 & ~dual & ~is_marker
     
     fig, ax = plt.subplots(figsize=(10,10))
     ax.set_title(f'[{a1} vs {a2}] vs [{b1} vs {b2}]', fontsize=14)
@@ -998,6 +1000,7 @@ def dual_comparison_plot(pdf, pair1, df1, pair2, df2, p_thresh, fc_thresh, min_p
     ax.scatter(x_values[s1], y_values[s1], c=[cmap(w) for w in weights[s1]], alpha=0.3, clip_on=False, s=sizes[s1], zorder=2)
     ax.scatter(x_values[s2], y_values[s2], c=[cmap(w) for w in weights[s2]], alpha=1.0, edgecolor='k', linewidth=0.5, clip_on=False, s=sizes[s2], zorder=4)
     ax.scatter(x_values[s3], y_values[s3], c=[cmap(w) for w in weights[s3]], alpha=1.0, edgecolor='#800080', linewidth=0.5, clip_on=False, s=sizes[s3], zorder=3)
+    ax.scatter(x_values[is_marker], y_values[is_marker], c='k', alpha=1.0, marker='*', clip_on=False, s=1.5*sizes[is_marker], zorder=4)
     
     hit_idx = np.nonzero(is_hit)[0]
     for i in hit_idx:
@@ -1066,6 +1069,8 @@ def dual_comparison_plot(pdf, pair1, df1, pair2, df2, p_thresh, fc_thresh, min_p
     ax.scatter([], [], s=2*min_size, color=cmap(0.5), label='insignificant')
     if min_peps > 1:
        ax.scatter([], [], s=2*min_size, color=lcolor, edgecolor='none', alpha=0.5, label='low pep count')
+    if markers:
+       ax.scatter([], [], s=2*min_size, color='k', marker='*', label='marker')
     ax.scatter([], [], s=32, marker="$X^!$", color='#800080', edgecolor='none', label='comparison missing')
     ax.scatter([], [], s=32, marker="$X^0$", color='#400040', edgecolor='none', label='vs all zeros')
     ax.scatter([], [], s=32, marker="$X^1$", color='#400040', edgecolor='none', label='vs single')
@@ -1146,6 +1151,7 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     intensity = np.maximum(np.array(df['zmean_grp1']), np.array(df['zmean_grp2']))
     names = np.array(df['labels'])
     
+
     if 'npeps' in df:
         npeps = np.array(df['npeps'])
     else:
@@ -1356,7 +1362,7 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
  
         if name in markers:
             marker_text.append((x, y, ds, name))
-            ax.scatter(x, y, s=size, color='k', edgecolor='k', clip_on=False, zorder=11)
+            ax.scatter(x, y, s=1.5*size, color='k', marker='*', edgecolor='k', clip_on=False, zorder=11)
             continue
         
         low_pep = npeps[i] < min_peps
@@ -1458,7 +1464,7 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     if min_peps > 1:
        ax.scatter([], [], s=2*min_size, color=lcolor, edgecolor='none', alpha=0.5, label='low pep count')
     if markers:
-       ax.scatter([], [], s=2*min_size, color='k', label='marker')
+       ax.scatter([], [], s=2*min_size, color='k', marker='*', label='marker')
     ax.scatter([], [], s=32, marker="$X^0$", color='#400040', edgecolor='none', label='vs all zeros')
     ax.scatter([], [], s=32, marker="$X^1$", color='#400040', edgecolor='none', label='vs single')
               

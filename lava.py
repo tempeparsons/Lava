@@ -13,7 +13,7 @@ from matplotlib.colors import LinearSegmentedColormap
 import lava_util as util
 import lava_plots as plots
 
-VERSION = '0.3.0'
+VERSION = '0.3.1'
 
 plots.VERSION = VERSION
 
@@ -747,8 +747,9 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
             labels = list(df[col])
             label_cols = [col]
     
-    
-    df['labels'] = [df[idx_cols[0]][i] if x in (np.nan,'',None) else x for i, x in enumerate(labels)]
+    labels = [df[idx_cols[0]][i] if x in (np.nan,'',None) else x for i, x in enumerate(labels)]
+    labels = [f'{x[:16]}...' if len(x) > 16 else x for x in labels]
+    df['labels'] = labels
  
     if extra_cols:
         extra_cols = _check_cols(df, extra_cols)
@@ -785,22 +786,27 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
     # Markers
     
     if markers:
-        avail_idx = set()
+        avail_idx = {}
         for idx_col in idx_cols:
-            avail_idx.update(df[idx_col])
-        
+            for idx, label in zip(df[idx_col], df['labels']):
+                avail_idx[idx] = label
+
         valid = []    
         for marker in markers:
+           marker = marker.strip(',')
+           
            if marker not in avail_idx:
                warn(f'Marker "{marker}" is not present in index')
            else:
-               valid.append(marker)
+               valid.append(avail_idx[marker])
         
+        marker_text = ' '.join([f'{a};{b}' for a, b in zip(markers, valid)])
         markers = valid
-    
+        info(f'Markers:  {marker_text}')
+        option_report.append(('Markers', marker_text))
+
     df.set_index(idx_cols, inplace=True)
-        
-        
+
     msg = 'Sample group membership'
     info(msg)
     option_report.append((msg, None))
@@ -1274,9 +1280,11 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
                 key2 = ':::'.join(pair2)
 
                 if do_pp:
-                    plots.dual_comparison_plot(pdf, pair1, plotdict[key1], pair2, plotdict[key2], p_thresh, f_thresh, min_peps)
+                    plots.dual_comparison_plot(pdf, pair1, plotdict[key1], pair2, plotdict[key2],
+                                            p_thresh, f_thresh, min_peps, markers)
                 if do_ff:
-                    plots.dual_comparison_plot(pdf, pair1, plotdict[key1], pair2, plotdict[key2], p_thresh, f_thresh, min_peps, is_pp=False)
+                    plots.dual_comparison_plot(pdf, pair1, plotdict[key1], pair2, plotdict[key2],
+                                               p_thresh, f_thresh, min_peps, markers, is_pp=False)
 
     if table_path:
         save_volcano_table(pairs, plotdict, table_path, f_thresh, p_thresh, min_peps)
