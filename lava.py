@@ -669,7 +669,8 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
                 label = label_dict[x]
             else:
                 n_missing += 1
-                label = x
+                #label = x
+                label = f'Q{n_missing}'
                 
             labels.append(label)
        
@@ -692,6 +693,10 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         if 'Gene Symbol' in df:
             labels = list(df['Gene Symbol'])
             label_cols = ['Gene Symbol']
+
+        elif 'Gene Symbol_1' in df:
+            labels = list(df['Gene Symbol_1'])
+            label_cols = ['Gene Symbol_1']
  
         elif 'Fasta headers' in df:
             gene_names = []

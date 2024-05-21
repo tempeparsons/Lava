@@ -79,33 +79,50 @@ def plot_sums_means_nans(df, value_cols, pdf, colors=['#D00000','#A0A000','#0080
     plt.close()
     
     
-def boxplots(df, value_cols, pdf, scatter_colors=['#D00000','#A0A000','#0080FF'], scatter_width=0.7):
+def boxplots(df, value_cols, pdf, scatter_colors=['#EEEEEE','#FF0000','#000000'], scatter_width=0.7):
     
+    cmap = LinearSegmentedColormap.from_list('box_scatter', scatter_colors)
+
     box_style = {'linewidth':1, 'color':'#0080FF', 'markerfacecolor':'#D00000'}
     line_style = {'linewidth':1, 'color':'#0080FF'}
     outlier_style = {'linewidth':1, 'markeredgecolor':'#D00000', 'markerfacecolor':'#FF8080'}
     med_style = {'linewidth':1, 'color':'#000000'}
     
     maxw = max([len(x) for x in list(value_cols)])
-    fontsize = min(8, 80.0/maxw)
+    fontsize = min(8, 58.0/maxw)
     
     fig, (ax1, ax2) = plt.subplots(2,1, figsize=(8,8))
-    df.boxplot(column=value_cols, ax=ax1, grid=False, rot=45, fontsize=fontsize, boxprops=box_style,
+    df.boxplot(column=value_cols, ax=ax1, grid=False, rot=90, fontsize=fontsize, boxprops=box_style,
                whiskerprops=line_style, capprops=line_style, flierprops=outlier_style, medianprops=med_style)     
     ax1.set_title('Sample value distributions')
 
-    ns = len(scatter_colors)
+    #ns = len(scatter_colors)
     nc = len(value_cols)
+    
+    y_vals_all = []
+    x_vals_all = []
     
     for i, col in enumerate(value_cols):
         y_vals = np.sort(df[col])
- 
+        y_vals = y_vals[y_vals > 0.0]
         # Random but avoidung clumps
         dx = np.random.uniform(scatter_width/4, scatter_width/2, len(y_vals))
         x_vals = i + (np.cumsum(dx) % scatter_width) - scatter_width/2
  
-        color = scatter_colors[i % ns]
-        ax2.scatter(x_vals, y_vals, color=color, alpha=0.3, s=4)
+        x_vals_all.append(x_vals)
+        y_vals_all.append(y_vals)
+        #color = scatter_colors[i % ns]
+        
+    y_vals_all = np.concatenate(y_vals_all, axis=0).astype(np.float32)
+    x_vals_all = np.concatenate(x_vals_all, axis=0).astype(np.float32)
+    
+    #xgrid = nc * 8
+    #ygrid = int(0.3 * xgrid)
+    
+    #ax2.hexbin(x_vals_all, y_vals_all, cmap=cmap, gridsize=(xgrid, ygrid), mincnt=1, edgecolors='none')
+    ax2.hist2d(x_vals_all, y_vals_all, cmap=cmap, bins=(nc, 100), cmin=1, range=((-0.5,nc-0.5), (y_vals_all.min(), y_vals_all.max())))
+
+    #ax2.scatter(x_vals, y_vals, color=color, alpha=0.3, s=4)
  
     x_ticks = np.arange(0, nc)   
     ax2.set_xlim(-0.5, nc-0.5)  
