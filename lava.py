@@ -630,7 +630,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         idx_cols = [x for x in DEFAULT_INDEX_COLS if x in df]
       
         if not idx_cols:
-            fail('No valid index columns found after falling back to default; {' '.join(DEFAULT_INDEX_COLS)}')
+            fail(f'No valid index columns found after falling back to default; {' '.join(DEFAULT_INDEX_COLS)}')
         
         extra_id_col = None
             
