@@ -1151,7 +1151,6 @@ def volcano(pdf, pair_name, df, FClim, pthresh, min_peps, colors=['#0080FF','#A0
     intensity = np.maximum(np.array(df['zmean_grp1']), np.array(df['zmean_grp2']))
     names = np.array(df['labels'])
     
-
     if 'npeps' in df:
         npeps = np.array(df['npeps'])
     else:
