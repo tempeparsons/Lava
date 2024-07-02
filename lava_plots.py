@@ -582,8 +582,6 @@ def correlation_plot(df, value_cols, pdf, colors=['#00FFFF','#0000FF','#000000',
     plt.close()
 
 
-
-
 def pvalFC_hists(plotdict, pdf, fontsize=8, colors=['#D00000','#0080FF'], nbins=50):
     
     ###  Splt this between comparison sets
