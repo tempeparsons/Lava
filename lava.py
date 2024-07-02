@@ -93,7 +93,15 @@ def _read_data(file_path):
         df = pd.read_excel(file_path, engine='openpyxl')
         
     elif file_ext in FILE_EXTS_CSV:
-        df = pd.read_csv(file_path)
+        with open(file_path) as file_obj:
+          for line in file_obj:
+            if line.count('\t') > line.count(','):
+              sep = '\t'
+            else:
+              sep = ','  
+            break
+        
+        df = pd.read_csv(file_path, sep=sep)
         
     else:    # Last resort try plain text
         df = pd.read_table(file_path, na_values=[' '])
@@ -141,7 +149,7 @@ def _read_data(file_path):
     return df
 
     
-def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps):
+def save_volcano_table(pairs, plotdict, save_path, f_thresh, p_thresh, min_peps):
    
    nmap = {'grp1grp2_FC':'log2_fold_change','Tpvals':'-log2_pvalue',
            'pvals':'p-value', 'nobs_grp1':'nobs_A', 'nobs_grp2':'nobs_B',
@@ -159,6 +167,7 @@ def save_volcano_table(pairs, plotdict,  save_path, f_thresh, p_thresh, min_peps
    color_dict = {}
    for key in keys:
        df = plotdict[key]
+
        lfc = np.array(df['grp1grp2_FC'])
        pvs = np.array(df['Tpvals'])
        n = len(lfc)
@@ -455,7 +464,7 @@ def _read_exp_file(df, file_path):
     for group_dict in group_dicts:
       if len(group_dict) == 1:
         bg_groups.update(group_dict)
-      else:
+      elif len(group_dict):
         compare_groups.append(group_dict)
     
     return compare_groups, bg_groups # a list of {group_nameA:[col_name1, col_name2], group_nameB:[col_name3, col_name4],}
@@ -630,7 +639,8 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         idx_cols = [x for x in DEFAULT_INDEX_COLS if x in df]
       
         if not idx_cols:
-            fail(f'No valid index columns found after falling back to default; {' '.join(DEFAULT_INDEX_COLS)}')
+            default_cols = ' '.join(DEFAULT_INDEX_COLS)
+            fail(f'No valid index columns found after falling back to default; {default_cols}')
         
         extra_id_col = None
             
@@ -847,7 +857,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
                   value_cols.append(col)
     
        group_cols.update(group_dict)
-    
+     
     if bg_groups:
         names = sorted(bg_groups)
         info(f'Background groups:  {", ".join(names)}')
@@ -895,6 +905,9 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
             groups = sorted(groups)
             for i, g1 in enumerate(groups[:-1]):
                 for g2 in groups[i+1:]:
+                    if (g1, g2) in pairs:
+                      continue
+                      
                     msg = f'{g1}  vs  {g2}'
                     info('   ' + msg)
                     pairs.append((g1, g2))
@@ -1028,7 +1041,6 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         plt.subplots_adjust(top=1.0-margin, bottom=margin, left=margin, right=1.0-margin)  
         pdf.savefig(dpi=300)
          
-    
     info('Plotting bulk properties')
     plots.plot_sums_means_nans(df, value_cols, pdf)
     
@@ -1040,7 +1052,9 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
     #print('updated numeric columns:', value_cols)
     
     orig_df = df.copy()
-    df = np.log2(df[value_cols + bg_cols])
+    
+    cols = value_cols + [x for x in bg_cols if x not in value_cols]
+    df = np.log2(df[cols])
     # box plots
     info('Plotting box-plots')
     plots.boxplots(df, value_cols, pdf)
