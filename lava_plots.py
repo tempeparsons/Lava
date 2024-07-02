@@ -881,7 +881,10 @@ def dual_comparison_plot(pdf, pair1, df1, pair2, df2, p_thresh, fc_thresh, min_p
 
     # ? Add option to have these plots
     # Table output: fcs and pvals, max(pvalue) > thresh, max(p_value) > thresh (different colours), n_obs 1,2,3,4, n_pep, samce accession, labels, extra cols as volc.
-    
+        
+    if not markers:
+        markers = []
+        
     a1, a2 = pair1
     b1, b2 = pair2
     nlp = - np.log2(p_thresh)
