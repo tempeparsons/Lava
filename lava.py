@@ -1165,7 +1165,7 @@ def lava(in_path, exp_path=None, bg_path=None, software=DEFAULT_SOFTWARE, pdf_pa
         min_mu1 = np.quantile(np.array(df2['mean_grp1'])[~azeros1], 0.05)
         min_mu2 = np.quantile(np.array(df2['mean_grp2'])[~azeros2], 0.05)
         min_zmu1 = np.quantile(np.array(df2['zmean_grp1'])[~azeros1], 0.05)
-        min_zmu2 = np.quantile(np.array(df2['zmean_grp1'])[~azeros2], 0.05)
+        min_zmu2 = np.quantile(np.array(df2['zmean_grp2'])[~azeros2], 0.05)
         
         # Replace all-zero means with a lower bound
         df2['mean_grp1'] = np.where(azeros1, min_mu1, df2['mean_grp1'])
