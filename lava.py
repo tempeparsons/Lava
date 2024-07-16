@@ -162,7 +162,8 @@ def save_volcano_table(pairs, plotdict, save_path, f_thresh, p_thresh, min_peps)
    
    path_root, file_ext = os.path.splitext(save_path)
    file_ext = file_ext.lower()
-   
+   lp_thresh = -np.log2(p_thresh)
+
    keys = [f'{a}:::{b}' for a,b in pairs]
    color_dict = {}
    for key in keys:
@@ -184,7 +185,7 @@ def save_volcano_table(pairs, plotdict, save_path, f_thresh, p_thresh, min_peps)
                klass = 'low_pep'
                color = 'background-color: #E0E0E0'
  
-           elif pvs[i] >= p_thresh:
+           elif pvs[i] >= lp_thresh:
                if lfc[i] >= f_thresh:
                   klass = 'POS'
                   color = 'background-color: #FFD0D0'
@@ -212,8 +213,8 @@ def save_volcano_table(pairs, plotdict, save_path, f_thresh, p_thresh, min_peps)
        df.insert(j, 'hit_class', cats)
        
        sort_cols = [-pvs]
-       sort_cols.append(~((lfc <= -f_thresh) & (pvs >= p_thresh)))
-       sort_cols.append(~((lfc >= f_thresh) & (pvs >= p_thresh)))
+       sort_cols.append(~((lfc <= -f_thresh) & (pvs >= lp_thresh)))
+       sort_cols.append(~((lfc >= f_thresh) & (pvs >= lp_thresh)))
        
        if 'npeps' in df:
          sort_cols.append(np.array(df['npeps'] < min_peps))
@@ -240,11 +241,9 @@ def save_volcano_table(pairs, plotdict, save_path, f_thresh, p_thresh, min_peps)
      
      return styles
    
-   op_thresh = 2.0 ** (-p_thresh)
-   
    def color_pv(vals):
      
-     styles = ['font-weight: bold' if v < op_thresh else None for v in vals]
+     styles = ['font-weight: bold' if v < p_thresh else None for v in vals]
      
      return styles
 
