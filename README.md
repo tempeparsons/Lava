@@ -2,15 +2,17 @@
 
 ## Introduction  
 
-Welcome to the Lava repository. Lava works on Linux, Windows and Mac (though it's not been tested on a Mac for a long time).  
-This software has been built for the analysis of exploratory proteomics experiments that have few replicates <strong>(minimum 3)</strong>. Missing data values can be much more problematic in proteomics compared to sequencing data and if a pilot study only contains a few replicates, thye way the missing values are handled can lead to dramatically different conclusions. Some off-the-shelf differential abundance software can miss out proteins where that value is missing in one group of replicates. Or, more worryingly, impute that value from the other group. Imagine that this protein had been knocked out in one group, so you knew it should be absent from all those replicates. That could be the most important conslusion, so you don't want the differences flattened out by imputation. You might want to set missing values to the lowest detectable value of the whole dataset. That's a fair idea, if the software allows it, but is this going to affect the variance? The number of missing values and the variance of the unimputed values are important features of any dataset, so need to be preserved.  
+Welcome to the Lava repository. Lava works on Linux, Windows.  
+<br>  
 
-Lava tried to preserve the maximum number of data points and their variance within any given dataset. It does this by accounting for replicate number in each treatment group and applying these rules:  
+This software has been built for the analysis of exploratory proteomics experiments that have few replicates <strong>(minimum 3)</strong>. Missing data values can be much more problematic in proteomics compared to sequencing data, as read depth is incomparabley lower in mass spectrometry. If a pilot study only contains a few replicates, they way the missing values are handled can lead to dramatically different conclusions. Some off-the-shelf differential abundance software can miss out proteins whose value is missing in one group of replicates. Or, more worryingly, they might impute that value from the other group. Imagine that this protein had been knocked out in one group, so you knew it should be absent from all those replicates. That could be the most important conslusion, so you don't want the differences flattened out by , or missed out entirely. You might want to set missing values to the lowest detectable value of the whole dataset. That's a fair idea, if the software allows it, but is this going to affect the variance? The number of missing values and the variance of the unimputed values are important features of any dataset, so they need to be preserved as much as possible.  
+
+Lava tries to preserve the maximum number of data points and their variance within any given dataset. It does this by accounting for replicate number in each treatment group and applying these rules:  
 
 <li> Half or more values present in both groups: measurement accepted  
 <li> All values absent in one group and over half present in corresponding group: measurement accepted  
 <li> Single value present in one group and all values present in corresponding group: measurement <strong>optionally</strong> accepted
-<li> Fewer than half, but more than zero, values present in both groups: measurement rejected  
+<li> Fewer than half (but more than zero) values present in both groups: measurement rejected  
 
 <br>  
 
@@ -23,7 +25,7 @@ Lava also includes other features that, as a proteomics researcher, I've found u
 ### Fold-Change Fold-Change plots and P-value P-value plots  
 These plots are unique to Lava. They compare either the Fold-Change or P-value output of one pair against another. For example, if you want to be looking at the fold change of a protein between mutant1 and mutant2, but each mutant must also be compared to a control, you can plot fold-change (control-mutant1) vs foldchange (control-mutant2) and get all fold-change comparisons in one plot. Values for the unplotted data (P-values, if plotting a Fold-Change plot) are included in point colour, so there's no loss of information.  
 
-We have tried to make aesthetically pleasing plots that are ready for publication but changes can be made in the plot.py file.  
+We have tried to make aesthetically pleasing plots that are ready for publication but changes can be made in the lava_plots.py file.  
 
 
 ## How to use Lava (scroll down for troubleshooting)
