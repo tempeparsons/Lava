@@ -1,0 +1,17 @@
+# Virtual environments
+lava_env/
+.venv/
+venv/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Outputs you don't want to commit (adjust to your project)
+#*.pdf

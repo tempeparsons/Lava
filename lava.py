@@ -354,11 +354,12 @@ def _read_bg_file(df, bg_path, group_dicts, bg_groups):
     else:
         delimiter = ','
     
+
     col_names = set()
     for group_dict in group_dicts:
         for group, cols in group_dict.items():
             col_names.update(cols)
-    
+
     bg_dict = {}
     with open(bg_path, newline='') as file_obj:
         for row in csv.reader(file_obj, delimiter=delimiter):
@@ -379,7 +380,7 @@ def _read_bg_file(df, bg_path, group_dicts, bg_groups):
                fail(f'Background name "{bg_name}" from background file {bg_path} does not refer to a group in the experimental design. Valid background groups: {valid}')
 
             bg_dict[col_name] = bg_name
-            
+
     return bg_dict
             
             
@@ -425,7 +426,6 @@ def _read_exp_file(df, file_path):
                 group = group.strip()
                 if group:
                     group_dicts[i][group].append(col_name)
-                
             
     if group_dicts:
         col_rename = None
@@ -465,7 +465,8 @@ def _read_exp_file(df, file_path):
         bg_groups.update(group_dict)
       elif len(group_dict):
         compare_groups.append(group_dict)
-    
+        bg_groups.update(group_dict) ######################################
+        
     return compare_groups, bg_groups # a list of {group_nameA:[col_name1, col_name2], group_nameB:[col_name3, col_name4],}
     
       
@@ -1363,7 +1364,7 @@ def main(argv=None):
                                 'not among themselves. If there is no reference group then all groups will be compared to all relavent others. ')
     
     arg_parse.add_argument('-m', '--marker-ids', dest="m", metavar='MARKER_ID', nargs='+',  default=None,
-                           help='An optional list of marker IDs/accessions to label on plots; these must be space separated and match values in the index columns (-i).')
+                           help='An optional list of marker IDs/accessions to label on plots; each must be in quotation marks and space separated and match values in the index columns (-i).')
  
     arg_parse.add_argument('-g', '--graphics-pdf', dest="g", metavar='PDF_FILE_PATH', default=None,
                            help=f"Optional path to save graphs as a PDF file. If not specified graphics will be plotted to screen.")
